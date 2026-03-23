@@ -460,3 +460,113 @@ button:active{
   border-color: rgba(24, 59, 255, .35);
 }
 
+@media (max-width: 768px){
+  .wrap{
+    padding:16px 12px 24px;
+    gap:12px;
+  }
+
+  header{
+    padding:12px;
+    border-radius: 14px;
+  }
+
+  .logo{
+    width:40px;
+  }
+
+  .title{
+    font-size:18px;
+  }
+
+  .subtitle{
+    font-size:12px;
+  }
+
+  .panelInner{
+    padding:12px;
+  }
+
+  .searchRow{
+    gap:8px;
+  }
+
+  .field{
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .searchBtnWrap{
+    flex: 1 1 100%;
+    min-width: 0;
+    margin-top: 0;
+  }
+
+  .searchBtnWrap button{
+    width:100%;
+    min-width: 0;
+  }
+
+  .card{
+    padding:12px;
+    border-radius: 14px;
+  }
+
+  .cardTop{
+    flex-direction:column;
+    gap:4px;
+    margin-bottom:8px;
+  }
+
+  .cardTime{
+    white-space:normal;
+    font-size:12px;
+  }
+
+  .kv{
+    gap:8px 12px;
+  }
+
+  .modalOverlay{
+    padding:10px;
+  }
+
+  .modal{
+    border-radius: 14px;
+  }
+
+  .modalHeader{
+    padding:12px 12px 8px;
+  }
+
+  .modalBody{
+    padding:6px 12px 12px;
+  }
+}
+
+@media (max-width: 420px){
+  .title{
+    font-size:16px;
+  }
+
+  .subtitle{
+    font-size:11px;
+  }
+
+  input[type="text"],
+  button,
+  .choiceBtn,
+  .btnSecondary{
+    height:42px;
+    font-size:14px;
+  }
+
+  .modalActions{
+    justify-content:stretch;
+    padding:0 12px 12px;
+  }
+
+  .modalActions .btnSecondary{
+    width:100%;
+  }
+}
