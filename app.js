@@ -1,11 +1,52 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbyqS294RZt9lU5wSD4yeaEryrVgwylSvH6GBbJySzajYuBLjVN2jUq6Psj2AHffDx37/exec";
 
+const RESULTS_RESET_MS = 60 * 1000;
+let resultsResetTimerId = null;
+
+function cancelResultsReset() {
+  if (resultsResetTimerId !== null) {
+    clearTimeout(resultsResetTimerId);
+    resultsResetTimerId = null;
+  }
+}
+
+function scheduleResultsReset(div) {
+  cancelResultsReset();
+  resultsResetTimerId = setTimeout(() => {
+    resultsResetTimerId = null;
+    div.innerHTML = "";
+    hideRefreshButton();
+  }, RESULTS_RESET_MS);
+}
+
+function showRefreshButton() {
+  const el = document.getElementById("refreshBtn");
+  if (el) el.removeAttribute("hidden");
+}
+
+function hideRefreshButton() {
+  const el = document.getElementById("refreshBtn");
+  if (el) el.setAttribute("hidden", "");
+}
+
+function resetSearch() {
+  cancelResultsReset();
+  const nameInput = document.getElementById("name");
+  const div = document.getElementById("results");
+  if (nameInput) nameInput.value = "";
+  if (div) div.innerHTML = "";
+  hideRefreshButton();
+  nameInput?.focus();
+}
+
 async function search() {
   const nameInput = document.getElementById("name");
   const rawQuery = (nameInput.value || "").trim();
   const div = document.getElementById("results");
   const btn = document.getElementById("searchBtn");
 
+  cancelResultsReset();
+  hideRefreshButton();
   div.innerHTML = "";
 
   if (!rawQuery) {
@@ -136,6 +177,8 @@ function kvItem(k, v) {
 async function runQuery(query, { nameInput, div, btn, role }) {
   let choicesModalEl = null;
 
+  cancelResultsReset();
+  hideRefreshButton();
   btn.disabled = true;
   nameInput.disabled = true;
   div.innerHTML = "";
@@ -150,9 +193,13 @@ async function runQuery(query, { nameInput, div, btn, role }) {
       div.innerHTML = "";
       if (!data.length) {
         div.appendChild(renderEmpty("No lessons today", "Please try another name."));
+        scheduleResultsReset(div);
+        showRefreshButton();
         return;
       }
       data.forEach(e => div.appendChild(createEventCard(e)));
+      scheduleResultsReset(div);
+      showRefreshButton();
       return;
     }
 
@@ -184,16 +231,22 @@ async function runQuery(query, { nameInput, div, btn, role }) {
     if (!results || results.length === 0) {
       div.innerHTML = "";
       div.appendChild(renderEmpty("No lessons today", "Please try another name."));
+      scheduleResultsReset(div);
+      showRefreshButton();
       return;
     }
 
     div.innerHTML = "";
     results.forEach(e => div.appendChild(createEventCard(e)));
+    scheduleResultsReset(div);
+    showRefreshButton();
 
   } catch (err) {
     console.error(err);
     div.innerHTML = "";
     div.appendChild(renderEmpty("Error loading data", "Please try again in a moment."));
+    scheduleResultsReset(div);
+    showRefreshButton();
   } finally {
     // If a modal is open (role choice or name choice), keep form disabled.
     const anyModalOpen = document.querySelector(".modalOverlay");
