@@ -1,5 +1,4 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbyOkNPd7RTUgtISDDqy8B8VLtJtgF_myu84RXbfzRihD1G1QmJQu2cPeJW1iMVf5PxZow/exec";
-
 /** Must match keys in Code.gs. Change both sides when rotating. */
 const STAFF_KEY = "achievers-wc-staff-2026";
 const TUTOR_KEY = "achievers-tutor";
@@ -10,8 +9,20 @@ const RESULTS_RESET_MS = 60 * 1000;
 const BOARD_REFRESH_MS = 60 * 1000;
 const BOARD_FLOORS = ["13", "10", "8"];
 
-const STUDENT_HELP_TEXT =
-  "If you can't find your room in this portal, please go to Room 1012, 10/F, Tai Yau Building, 181 Johnston Road, Wan Chai and check our Room Management Desktop regarding today's floor board. If you really can't find it, please contact +852 5727 1209 for help. Thanks";
+const HELP_PHONE = "+852 5727 1209";
+const HELP_ADDRESS = "Room 1012, 10/F, Tai Yau Building, 181 Johnston Road, Wan Chai";
+
+const STUDENT_HELP = {
+  title: "Can't find your room?",
+  body: `Please visit the Room Management Desktop at ${HELP_ADDRESS} to check today’s floor board.`,
+  contact: `Still stuck? Call ${HELP_PHONE}.`
+};
+
+const TUTOR_HELP = {
+  title: "Can't find your lesson room?",
+  body: `Please visit the Room Management Desktop at ${HELP_ADDRESS} to check today’s floor board.`,
+  contact: `Need help? Call ${HELP_PHONE}.`
+};
 
 let resultsResetTimerId = null;
 let boardRefreshTimerId = null;
@@ -167,7 +178,7 @@ function applyAccessMode() {
   const subtitle = document.getElementById("appSubtitle");
   const nameLabel = document.getElementById("nameLabel");
   const nameInput = document.getElementById("name");
-  const helpEl = document.getElementById("studentHelp");
+  const helpEl = document.getElementById("portalHelp");
 
   if (modeSwitch) modeSwitch.hidden = !staffMode;
   if (staffBadge) {
@@ -178,7 +189,8 @@ function applyAccessMode() {
         ? "Tutor mode"
         : "";
   }
-  if (helpEl) helpEl.hidden = !!(staffMode || tutorMode);
+
+  updatePortalHelp();
 
   if (staffMode) {
     if (subtitle) subtitle.textContent = "Staff mode — search or open the floor board.";
@@ -195,6 +207,66 @@ function applyAccessMode() {
     if (nameInput) nameInput.placeholder = "e.g. Jayden or Peter Chan";
     setMode("search");
   }
+}
+
+function currentHelpContent() {
+  if (staffMode) return null;
+  return tutorMode ? TUTOR_HELP : STUDENT_HELP;
+}
+
+function fillHelpCard(el, content) {
+  if (!el || !content) return;
+  el.innerHTML = "";
+
+  const title = document.createElement("p");
+  title.className = "helpNoteTitle";
+  title.textContent = content.title;
+
+  const body = document.createElement("p");
+  body.className = "helpNoteBody";
+  body.textContent = content.body;
+
+  const contact = document.createElement("p");
+  contact.className = "helpNoteContact";
+  const match = String(content.contact || "").match(/^(.*?)(\+852[\d\s]+)(.*)$/);
+  if (match) {
+    contact.append(match[1]);
+    const link = document.createElement("a");
+    link.href = `tel:${HELP_PHONE.replace(/\s+/g, "")}`;
+    link.textContent = match[2].trim();
+    contact.appendChild(link);
+    contact.append(match[3] || "");
+  } else {
+    contact.textContent = content.contact || "";
+  }
+
+  el.appendChild(title);
+  el.appendChild(body);
+  el.appendChild(contact);
+}
+
+function updatePortalHelp() {
+  const helpEl = document.getElementById("portalHelp");
+  if (!helpEl) return;
+
+  const content = currentHelpContent();
+  if (!content) {
+    helpEl.hidden = true;
+    helpEl.innerHTML = "";
+    return;
+  }
+
+  helpEl.hidden = false;
+  fillHelpCard(helpEl, content);
+}
+
+function createHelpNoteElement() {
+  const content = currentHelpContent();
+  if (!content) return null;
+  const el = document.createElement("div");
+  el.className = "helpNote";
+  fillHelpCard(el, content);
+  return el;
 }
 
 function cancelResultsReset() {
@@ -442,12 +514,8 @@ function renderEmpty(mainText, subText) {
   wrap.appendChild(hint);
   if (subText) wrap.appendChild(p);
 
-  if (!staffMode && !tutorMode) {
-    const help = document.createElement("p");
-    help.className = "helpNote";
-    help.textContent = STUDENT_HELP_TEXT;
-    wrap.appendChild(help);
-  }
+  const help = createHelpNoteElement();
+  if (help) wrap.appendChild(help);
 
   return wrap;
 }

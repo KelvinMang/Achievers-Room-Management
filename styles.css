@@ -138,20 +138,51 @@ button.floorTab.is-active{
 
 .helpNote{
   margin:18px 0 0;
-  padding:14px 16px;
-  border-radius:14px;
-  border:1px solid rgba(12, 26, 54, .10);
-  background: rgba(0, 36, 125, .04);
+  padding:16px 18px;
+  border-radius:16px;
+  border:1px solid rgba(0, 36, 125, .12);
+  background:
+    linear-gradient(180deg, rgba(0, 36, 125, .06), rgba(0, 36, 125, .03));
+  color: var(--ink);
+}
+
+.helpNoteTitle{
+  margin:0 0 8px;
+  font-size:15px;
+  font-weight:900;
+  letter-spacing:-0.01em;
+  color: var(--header-navy);
+}
+
+.helpNoteBody,
+.helpNoteContact{
+  margin:0;
   color: var(--muted);
   font-size:14px;
   font-weight:600;
-  line-height:1.5;
+  line-height:1.55;
+}
+
+.helpNoteContact{
+  margin-top:10px;
+}
+
+.helpNote a{
+  color: var(--header-navy);
+  font-weight:800;
+  text-decoration:none;
+  border-bottom:1px solid rgba(0, 36, 125, .25);
+}
+
+.helpNote a:hover{
+  border-bottom-color: var(--header-navy);
 }
 
 .empty .helpNote{
   margin-top:16px;
   text-align:left;
-  max-width:520px;
+  max-width:560px;
+  width:100%;
 }
 
 .dayNav{
@@ -1127,7 +1158,15 @@ button.btnRefresh:active{
 
   .helpNote{
     margin-top:14px;
-    padding:12px 14px;
+    padding:14px;
+  }
+
+  .helpNoteTitle{
+    font-size:14px;
+  }
+
+  .helpNoteBody,
+  .helpNoteContact{
     font-size:13px;
   }
 
