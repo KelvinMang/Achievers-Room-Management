@@ -7,7 +7,7 @@ Yes — this works on **GitHub Pages**. One static site; access is split by URL 
 | Who | Link | What they see |
 | --- | --- | --- |
 | **Students (share this)** | `https://YOUR_GITHUB_PAGES_URL/` | Student search + Today/Tomorrow. Name picker if several match. Help text to visit 1012. No Floor board. |
-| **Tutors** | `https://YOUR_GITHUB_PAGES_URL/?tutor` | Tutor-name search only (find their rooms). No Floor board. |
+| **Tutors** | `https://YOUR_GITHUB_PAGES_URL/?tutor=YOUR_TUTOR_KEY` | Tutor-name search only (find their rooms). No Floor board. |
 | **Staff / reception kiosk** | `https://YOUR_GITHUB_PAGES_URL/?staff=YOUR_STAFF_KEY` | Floor board + Student/Tutor search. |
 
 Keys live in [`app.js`](./app.js) and [`Code.gs`](./Code.gs) — keep them identical. **Do not put real keys in the README.**
@@ -32,7 +32,7 @@ Push to `main`. [`.github/workflows/static.yml`](./.github/workflows/static.yml)
 - `Dan` should find lessons (not a dead `Dan, Dan` choice)
 - Help note about Room 1012 is visible
 
-**Tutor link (`?tutor`)**
+**Tutor link (`?tutor=...`)**
 
 - Searches tutor side of titles / `Tutor:` description
 - No Floor board tab
