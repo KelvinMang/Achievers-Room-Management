@@ -6,7 +6,8 @@
  *   ?mode=board&day=today|tomorrow&key=STAFF_KEY
  *   ?mode=search&name=...&role=...&day=today|tomorrow&key=...
  *
- * Public (no key): student role only, full name required (2+ words), no lesson titles.
+ * Public (no key): student role only, no lesson titles.
+ *   Partial names OK — if several students match, return name choices for the UI.
  * Staff (valid key): tutor search + floor board unlocked.
  *
  * Keep STAFF_KEY in sync with app.js.
@@ -152,13 +153,13 @@ function runSearch(params, staff) {
     return { error: "Missing name", results: [], choices: [] };
   }
 
-  // Public link: students only, require first + last (or more) to reduce casual lookups.
+  // Public link: students only (no tutor browse / no floor board).
   if (!staff) {
     role = "student";
-    var publicParts = name.split(/\s+/).filter(Boolean);
-    if (publicParts.length < 2) {
+    // Avoid ultra-short lookups like "a" / "li"
+    if (name.replace(/\s+/g, "").length < 3) {
       return {
-        error: "Enter your full name (first and last).",
+        error: "Enter at least 3 letters of your name.",
         results: [],
         choices: []
       };
@@ -175,11 +176,13 @@ function runSearch(params, staff) {
   var calendars = [WAN_CHAI_CALENDAR_ID, PRINCE_EDWARD_CALENDAR_ID];
   var queryKeywords = name.split(/\s+/).filter(Boolean);
   var keyword = queryKeywords.length === 1 ? queryKeywords[0] : "";
+  // Ask to disambiguate on single-keyword searches, or whenever public finds multiple students.
   var shouldAskChoice = !!(keyword && (role === "student" || role === "tutor"));
 
   var range = dayRange(day);
   var results = [];
   var choiceSet = {};
+  var studentNameSet = {};
 
   getEventsForCalendars(calendars, range.start, range.end).forEach(function (item) {
     var ev = item.ev;
@@ -208,6 +211,10 @@ function runSearch(params, staff) {
     var roomData = extractRoom(title, desc, locationField);
     var studentName = extractStudentDisplayName(title);
 
+    if (studentName && studentName !== "Group class" && studentName !== "Lesson") {
+      studentNameSet[studentName] = true;
+    }
+
     var row = {
       student: studentName,
       start: ev.getStartTime(),
@@ -225,19 +232,29 @@ function runSearch(params, staff) {
 
     results.push(row);
 
-    if (shouldAskChoice) {
+    if (shouldAskChoice || !staff) {
       var segmentRaw = getRoleSegmentRaw(rawCombined, role);
-      extractNameChoicesFromSegment(segmentRaw, keyword).forEach(function (c) {
+      extractNameChoicesFromSegment(segmentRaw, keyword || name).forEach(function (c) {
         choiceSet[c] = true;
       });
+      if (studentName && studentName !== "Group class" && studentName !== "Lesson") {
+        choiceSet[studentName] = true;
+      }
     }
   });
 
-  if (shouldAskChoice) {
-    var choices = Object.keys(choiceSet);
-    if (choices.length > 1) {
-      return { choices: choices, results: [] };
+  // Prefer clean student display names when disambiguating students.
+  var choices = Object.keys(choiceSet);
+  if (role === "student") {
+    var fromStudents = Object.keys(studentNameSet);
+    if (fromStudents.length >= 1) {
+      choices = fromStudents;
     }
+  }
+
+  // If several people match a short/partial name, ask the UI to pick one first.
+  if (choices.length > 1 && (shouldAskChoice || !staff)) {
+    return { choices: choices, results: [], day: day };
   }
 
   results.sort(function (a, b) {

@@ -148,9 +148,9 @@ function applyAccessMode() {
     if (nameLabel) nameLabel.textContent = "Student / Tutor name";
     if (nameInput) nameInput.placeholder = "Enter student or tutor name (e.g. Peter Chan)";
   } else {
-    if (subtitle) subtitle.textContent = "Enter your full name to find your room (today or tomorrow).";
-    if (nameLabel) nameLabel.textContent = "Your full name";
-    if (nameInput) nameInput.placeholder = "e.g. Peter Chan";
+    if (subtitle) subtitle.textContent = "Search your name to find your room (today or tomorrow).";
+    if (nameLabel) nameLabel.textContent = "Your name";
+    if (nameInput) nameInput.placeholder = "e.g. Jayden or Peter Chan";
     setMode("search");
   }
 }
@@ -289,20 +289,21 @@ async function search() {
         "Enter your name",
         staffMode
           ? "Type a student or tutor name and press Search."
-          : "Type your full name (first and last) and press Search."
+          : "Type your name and press Search. If a few people match, you’ll pick yours."
       )
     );
     return;
   }
 
-  if (!staffMode && countNameParts(rawQuery) < 2) {
+  if (!staffMode && rawQuery.replace(/\s+/g, "").length < 3) {
     div.appendChild(
-      renderEmpty("Use your full name", "Please enter at least first and last name (e.g. Peter Chan).")
+      renderEmpty("Name too short", "Enter at least 3 letters of your name.")
     );
     return;
   }
 
-  // Public: always student lookup. Staff: ask Student vs Tutor.
+  // Public: always student lookup (may show name picker if several match).
+  // Staff: ask Student vs Tutor first.
   if (!staffMode) {
     await runQuery(rawQuery, { nameInput, div, btn, role: "student" });
     return;
@@ -494,9 +495,7 @@ async function runQuery(query, { nameInput, div, btn, role }) {
       div.innerHTML = "";
       div.appendChild(
         renderEmpty(
-          data.error === "Enter your full name (first and last)."
-            ? "Use your full name"
-            : "Could not search",
+          /3 letters/i.test(data.error) ? "Name too short" : "Could not search",
           data.error
         )
       );

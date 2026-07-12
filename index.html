@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Room Finder</title>
   <link rel="icon" type="image/png" href="./favicon.png" />
-  <link rel="stylesheet" href="./styles.css?v=11" />
+  <link rel="stylesheet" href="./styles.css?v=12" />
   <meta name="theme-color" content="#00247d" />
 </head>
 <body>
@@ -15,7 +15,7 @@
         <img class="logo" src="./Achievers_Logo_White_RGB.png" alt="The Achievers logo" />
         <div class="brandText">
           <p class="title">Achievers Lesson Finder</p>
-          <p class="subtitle" id="appSubtitle">Enter your full name to find today’s room.</p>
+          <p class="subtitle" id="appSubtitle">Search your name to find today’s room.</p>
         </div>
       </div>
     </header>
@@ -45,8 +45,8 @@
 
           <form class="searchRow" autocomplete="off" onsubmit="event.preventDefault(); search();">
             <div class="field">
-              <label for="name" id="nameLabel">Your full name</label>
-              <input id="name" type="text" name="lesson-query" autocomplete="off" placeholder="e.g. Peter Chan" />
+              <label for="name" id="nameLabel">Your name</label>
+              <input id="name" type="text" name="lesson-query" autocomplete="off" placeholder="e.g. Jayden or Peter Chan" />
             </div>
             <div class="searchBtnWrap">
               <button type="submit" id="searchBtn">Search</button>
@@ -92,6 +92,6 @@
     </main>
   </div>
 
-  <script src="./app.js?v=11"></script>
+  <script src="./app.js?v=12"></script>
 </body>
 </html>

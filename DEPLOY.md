@@ -29,8 +29,8 @@ Push to `main`. [`.github/workflows/static.yml`](./.github/workflows/static.yml)
 **Student link (no `?staff=`):**
 
 - Floor board tabs are hidden
-- Searching a single word → asks for full name
-- Searching a full name → only that student’s time/room (no full lesson title)
+- Searching a partial name (e.g. `Jayden`) → name picker if several match
+- After choosing a name → only that student’s time/room (no full lesson title)
 
 **Staff link (`?staff=...`):**
 
