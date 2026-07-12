@@ -96,6 +96,272 @@ header.app-header{
   text-overflow:ellipsis;
 }
 
+button.modeBtn,
+button.floorTab{
+  flex:0 0 auto;
+  min-width:0;
+  box-shadow:none !important;
+  background-image:none !important;
+  filter:none;
+}
+
+button.modeBtn:not(.is-active){
+  background: transparent !important;
+  color: var(--muted) !important;
+}
+
+button.floorTab:not(.is-active){
+  background: #fff !important;
+  color: var(--ink) !important;
+  border:1px solid rgba(12, 26, 54, .14);
+}
+
+button.modeBtn.is-active,
+button.floorTab.is-active{
+  background: var(--header-navy) !important;
+  color:#fff !important;
+  border-color: var(--header-navy);
+  box-shadow: 0 10px 22px rgba(0, 36, 125, .22) !important;
+}
+
+.staffBadge{
+  margin:0;
+  width:fit-content;
+  padding:8px 12px;
+  border-radius:999px;
+  background: rgba(0, 36, 125, .10);
+  color: var(--header-navy);
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+
+.modeBtn{
+  min-width:0;
+  height:48px;
+  padding:0 20px;
+  border-radius:12px;
+  border:0;
+  font-weight:800;
+  font-size:16px;
+  letter-spacing:.01em;
+  cursor:pointer;
+}
+
+.modeBtn:hover{
+  filter:none;
+  color: var(--ink);
+}
+
+.boardHeader{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:18px;
+}
+
+.boardTitle{
+  margin:0;
+  font-weight:900;
+  font-size:clamp(20px, 2.8vw, 26px);
+  letter-spacing:-0.02em;
+}
+
+.boardSub{
+  margin:6px 0 0;
+  color:var(--muted);
+  font-weight:600;
+  font-size:15px;
+}
+
+.boardHint{
+  margin:0 0 16px;
+  color:var(--muted);
+  font-size:14px;
+  font-weight:700;
+}
+
+.floorTabs{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:12px;
+}
+
+.floorTab{
+  min-width:88px;
+  height:48px;
+  padding:0 18px;
+  border-radius:12px;
+  font-weight:800;
+  font-size:16px;
+  cursor:pointer;
+}
+
+.floorTab:hover{
+  filter:none;
+}
+
+.board{
+  min-height:120px;
+}
+
+.scheduleList{
+  display:flex;
+  flex-direction:column;
+  border:1px solid rgba(12, 26, 54, .10);
+  border-radius:16px;
+  overflow:hidden;
+  background: rgba(255,255,255,.95);
+}
+
+.scheduleHead,
+.scheduleRow{
+  display:grid;
+  grid-template-columns: 10.5rem minmax(0, 1fr) 5.75rem;
+  gap: 0 1.25rem;
+  align-items:center;
+  padding:16px 18px;
+  box-sizing:border-box;
+}
+
+.scheduleHead{
+  background: rgba(0, 36, 125, .06);
+  color: var(--muted);
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  border-bottom:1px solid rgba(12, 26, 54, .08);
+}
+
+.scheduleRow{
+  border-top:1px solid rgba(12, 26, 54, .08);
+  min-height:64px;
+}
+
+.scheduleRow + .scheduleRow{
+  border-top:1px solid rgba(12, 26, 54, .08);
+}
+
+.scheduleTime{
+  color:var(--muted);
+  font-weight:800;
+  font-size:15px;
+  line-height:1.3;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.scheduleName{
+  font-size:clamp(17px, 2.2vw, 20px);
+  font-weight:800;
+  letter-spacing:-0.02em;
+  line-height:1.3;
+  min-width:0;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+.scheduleRoom{
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+}
+
+.scheduleRoomCode{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:88px;
+  height:40px;
+  padding:0 12px;
+  border-radius:12px;
+  background: var(--header-navy);
+  color:#fff;
+  font-weight:900;
+  font-size:17px;
+  letter-spacing:-0.02em;
+  white-space:nowrap;
+}
+
+/* Legacy room-card styles kept for compatibility */
+.roomGrid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap:14px;
+}
+
+.roomSection{
+  border:1px solid rgba(12, 26, 54, .10);
+  border-radius:16px;
+  background: rgba(255,255,255,.9);
+  overflow:hidden;
+}
+
+.roomHeading{
+  padding:14px 16px 12px;
+  background: linear-gradient(180deg, rgba(0,36,125,.08), rgba(0,36,125,.02));
+  border-bottom:1px solid rgba(12, 26, 54, .08);
+}
+
+.roomCode{
+  margin:0;
+  font-size:28px;
+  font-weight:900;
+  letter-spacing:-0.03em;
+  color: var(--header-navy);
+  line-height:1.1;
+}
+
+.roomMeta{
+  margin:4px 0 0;
+  color:var(--muted);
+  font-size:13px;
+  font-weight:700;
+}
+
+.lessonList{
+  display:flex;
+  flex-direction:column;
+}
+
+.boardRow{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px 16px;
+  border-top:1px solid rgba(12, 26, 54, .06);
+}
+
+.boardRow:first-child{
+  border-top:0;
+}
+
+.boardName{
+  font-size:18px;
+  font-weight:800;
+  letter-spacing:-0.01em;
+  line-height:1.25;
+  min-width:0;
+}
+
+.boardTime{
+  flex:0 0 auto;
+  white-space:nowrap;
+  color:var(--muted);
+  font-weight:800;
+  font-size:15px;
+}
+
+.kv > div{
+  min-width: min(100%, 220px);
+}
+
 main{
   display:grid;
   grid-template-columns: 1fr;
@@ -518,6 +784,16 @@ button.btnRefresh:active{
     gap:20px;
   }
 
+  .modeSwitch{
+    width:100%;
+  }
+
+  .modeBtn{
+    flex:1 1 0;
+    font-size:15px;
+    padding:0 12px;
+  }
+
   .panelInner{
     padding:24px 22px;
   }
@@ -540,6 +816,54 @@ button.btnRefresh:active{
   .searchBtnWrap button{
     width:100%;
     min-width: 0;
+  }
+
+  .boardHeader{
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .boardHeader .btnRefresh{
+    width:100%;
+  }
+
+  .floorTab{
+    flex:1 1 0;
+    min-width:0;
+  }
+
+  .scheduleHead{
+    display:none;
+  }
+
+  .scheduleRow{
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "time time"
+      "name room";
+    gap: 6px 12px;
+    padding:16px;
+    align-items:center;
+  }
+
+  .scheduleTime{
+    grid-area: time;
+    white-space:normal;
+    font-size:13px;
+  }
+
+  .scheduleName{
+    grid-area: name;
+    font-size:18px;
+  }
+
+  .scheduleRoom{
+    grid-area: room;
+    justify-content:flex-end;
+  }
+
+  .roomGrid{
+    grid-template-columns: 1fr;
   }
 
   .card{

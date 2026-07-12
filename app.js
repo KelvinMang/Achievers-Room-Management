@@ -1,12 +1,76 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbyqS294RZt9lU5wSD4yeaEryrVgwylSvH6GBbJySzajYuBLjVN2jUq6Psj2AHffDx37/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwEV7iBKurgbB4Mbp5GN8Obo6c9O0VWTyokICMwWmHsgcEdQ6-sleaybFYkq3ep-35yfQ/exec";
+
+/** Must match STAFF_KEY in Code.gs. Change both when rotating. */
+const STAFF_KEY = "achievers-wc-staff-2026";
+const STAFF_SESSION_KEY = "achievers_staff_key";
 
 const RESULTS_RESET_MS = 60 * 1000;
+const BOARD_REFRESH_MS = 60 * 1000;
+const BOARD_FLOORS = ["13", "10", "8"];
+
 let resultsResetTimerId = null;
+let boardRefreshTimerId = null;
+let boardData = null;
+let activeFloor = "13";
+let currentMode = "search";
+let staffMode = false;
+
+function resolveStaffMode() {
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = (params.get("staff") || "").trim();
+
+  if (fromUrl && fromUrl === STAFF_KEY) {
+    sessionStorage.setItem(STAFF_SESSION_KEY, STAFF_KEY);
+    return true;
+  }
+
+  if (fromUrl && fromUrl !== STAFF_KEY) {
+    sessionStorage.removeItem(STAFF_SESSION_KEY);
+    return false;
+  }
+
+  return sessionStorage.getItem(STAFF_SESSION_KEY) === STAFF_KEY;
+}
+
+function staffQueryParam() {
+  return staffMode ? `&key=${encodeURIComponent(STAFF_KEY)}` : "";
+}
+
+function applyAccessMode() {
+  staffMode = resolveStaffMode();
+
+  const modeSwitch = document.getElementById("modeSwitch");
+  const staffBadge = document.getElementById("staffBadge");
+  const subtitle = document.getElementById("appSubtitle");
+  const nameLabel = document.getElementById("nameLabel");
+  const nameInput = document.getElementById("name");
+
+  if (modeSwitch) modeSwitch.hidden = !staffMode;
+  if (staffBadge) staffBadge.hidden = !staffMode;
+
+  if (staffMode) {
+    if (subtitle) subtitle.textContent = "Staff mode — search or open the floor board.";
+    if (nameLabel) nameLabel.textContent = "Student / Tutor name";
+    if (nameInput) nameInput.placeholder = "Enter student or tutor name (e.g. Peter Chan)";
+  } else {
+    if (subtitle) subtitle.textContent = "Enter your full name to find today’s room.";
+    if (nameLabel) nameLabel.textContent = "Your full name";
+    if (nameInput) nameInput.placeholder = "e.g. Peter Chan";
+    setMode("search");
+  }
+}
 
 function cancelResultsReset() {
   if (resultsResetTimerId !== null) {
     clearTimeout(resultsResetTimerId);
     resultsResetTimerId = null;
+  }
+}
+
+function cancelBoardRefresh() {
+  if (boardRefreshTimerId !== null) {
+    clearTimeout(boardRefreshTimerId);
+    boardRefreshTimerId = null;
   }
 }
 
@@ -17,6 +81,16 @@ function scheduleResultsReset(div) {
     div.innerHTML = "";
     hideRefreshButton();
   }, RESULTS_RESET_MS);
+}
+
+function scheduleBoardRefresh() {
+  cancelBoardRefresh();
+  boardRefreshTimerId = setTimeout(() => {
+    boardRefreshTimerId = null;
+    if (currentMode === "board") {
+      loadBoard({ silent: true });
+    }
+  }, BOARD_REFRESH_MS);
 }
 
 function showRefreshButton() {
@@ -39,6 +113,71 @@ function resetSearch() {
   nameInput?.focus();
 }
 
+function setMode(mode) {
+  if (mode === "board" && !staffMode) {
+    mode = "search";
+  }
+
+  currentMode = mode === "board" ? "board" : "search";
+
+  const searchPanel = document.getElementById("searchPanel");
+  const boardPanel = document.getElementById("boardPanel");
+  const searchBtn = document.getElementById("modeSearchBtn");
+  const boardBtn = document.getElementById("modeBoardBtn");
+
+  const isSearch = currentMode === "search";
+
+  if (searchPanel) searchPanel.hidden = !isSearch;
+  if (boardPanel) boardPanel.hidden = isSearch || !staffMode;
+
+  searchBtn?.classList.toggle("is-active", isSearch);
+  boardBtn?.classList.toggle("is-active", !isSearch);
+  searchBtn?.setAttribute("aria-selected", String(isSearch));
+  boardBtn?.setAttribute("aria-selected", String(!isSearch));
+
+  if (isSearch) {
+    cancelBoardRefresh();
+  } else {
+    cancelResultsReset();
+    document.querySelectorAll(".modalOverlay").forEach(el => el.remove());
+    loadBoard();
+  }
+}
+
+function initModeSwitch() {
+  document.getElementById("modeSearchBtn")?.addEventListener("click", () => setMode("search"));
+  document.getElementById("modeBoardBtn")?.addEventListener("click", () => {
+    if (!staffMode) return;
+    setMode("board");
+  });
+
+  document.getElementById("floorTabs")?.addEventListener("click", e => {
+    const tab = e.target.closest(".floorTab");
+    if (!tab) return;
+    const floor = tab.getAttribute("data-floor");
+    if (!floor) return;
+    setActiveFloor(floor);
+    renderBoard();
+  });
+}
+
+function setActiveFloor(floor) {
+  activeFloor = String(floor);
+  document.querySelectorAll(".floorTab").forEach(tab => {
+    const on = tab.getAttribute("data-floor") === activeFloor;
+    tab.classList.toggle("is-active", on);
+    tab.setAttribute("aria-selected", String(on));
+  });
+}
+
+function countNameParts(value) {
+  return String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter(p => p.toLowerCase() !== "x").length;
+}
+
 async function search() {
   const nameInput = document.getElementById("name");
   const rawQuery = (nameInput.value || "").trim();
@@ -50,20 +189,36 @@ async function search() {
   div.innerHTML = "";
 
   if (!rawQuery) {
-    div.appendChild(renderEmpty("Enter a name", "Type a student or teacher name and press Search."));
+    div.appendChild(
+      renderEmpty(
+        "Enter your name",
+        staffMode
+          ? "Type a student or tutor name and press Search."
+          : "Type your full name (first and last) and press Search."
+      )
+    );
     return;
   }
 
-  // Step 1: Ask user whether they are student or tutor.
-  showChoicesModal(["Student", "Tutor"],
+  if (!staffMode && countNameParts(rawQuery) < 2) {
+    div.appendChild(
+      renderEmpty("Use your full name", "Please enter at least first and last name (e.g. Peter Chan).")
+    );
+    return;
+  }
+
+  // Public: always student lookup. Staff: ask Student vs Tutor.
+  if (!staffMode) {
+    await runQuery(rawQuery, { nameInput, div, btn, role: "student" });
+    return;
+  }
+
+  showChoicesModal(
+    ["Student", "Tutor"],
     async roleChoice => {
       const role = roleChoice === "Tutor" ? "tutor" : "student";
       const queryName = extractNameByRole(rawQuery, role) || rawQuery;
-
-      // Update the field so it's clear what we're searching for.
       nameInput.value = queryName;
-
-      // Close role modal(s) before running the query.
       document.querySelectorAll(".modalOverlay").forEach(el => el.remove());
       await runQuery(queryName, { nameInput, div, btn, role });
     },
@@ -72,7 +227,11 @@ async function search() {
       div.innerHTML = "";
       div.appendChild(renderEmpty("Cancelled", "Select Student or Tutor to continue."));
     },
-    { titleText: "Which role are you?", subText: "We will search your side of the input around 'x'." , modalId: "roleChoiceModal"}
+    {
+      titleText: "Which role are you?",
+      subText: "We will search your side of the input around 'x'.",
+      modalId: "roleChoiceModal"
+    }
   );
 }
 
@@ -80,17 +239,50 @@ function formatTime(dateStr) {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString([], {
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit"
   });
 }
 
-function renderLoading() {
+/** Compact range for the floor board so columns never collide. */
+function formatBoardTimeRange(startStr, endStr) {
+  const start = formatTime(startStr);
+  const end = formatTime(endStr);
+  if (!start || !end) return "TBC";
+
+  const startMeridiem = (start.match(/\s*([AP]M)$/i) || [])[1];
+  const endMeridiem = (end.match(/\s*([AP]M)$/i) || [])[1];
+
+  if (
+    startMeridiem &&
+    endMeridiem &&
+    startMeridiem.toUpperCase() === endMeridiem.toUpperCase()
+  ) {
+    const startBare = start.replace(/\s*[AP]M$/i, "").trim();
+    return `${startBare} – ${end}`;
+  }
+
+  return `${start} – ${end}`;
+}
+
+function formatBoardDate(dateStr) {
+  if (!dateStr) return "Today";
+  const d = new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString([], {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+}
+
+function renderLoading(label) {
   const wrap = document.createElement("div");
   wrap.className = "loading";
   wrap.innerHTML = `
     <span class="spinner" aria-hidden="true"></span>
-    <span>Loading...</span>
+    <span>${label || "Loading..."}</span>
   `;
   return wrap;
 }
@@ -122,7 +314,7 @@ function createEventCard(e) {
 
   const title = document.createElement("p");
   title.className = "cardTitle";
-  title.textContent = e.title || "Lesson";
+  title.textContent = e.student || e.title || "Lesson";
 
   const start = formatTime(e.start);
   const end = formatTime(e.end);
@@ -147,10 +339,17 @@ function createEventCard(e) {
   const location = e.location || "TBC";
   const room = isOnline
     ? "Online"
-    : (e.roomFormatted && e.roomFormatted !== "TBC" ? e.roomFormatted : (e.room || "TBC"));
+    : e.roomFormatted && e.roomFormatted !== "TBC"
+      ? e.roomFormatted
+      : e.room || "TBC";
 
   kv.appendChild(kvItem("Location", location));
   kv.appendChild(kvItem("Room", room));
+
+  // Staff only: full calendar title can reveal tutors / classmates.
+  if (staffMode && e.title && e.student && e.title !== e.student) {
+    kv.appendChild(kvItem("Lesson", e.title));
+  }
 
   card.appendChild(top);
   card.appendChild(meta);
@@ -185,10 +384,28 @@ async function runQuery(query, { nameInput, div, btn, role }) {
   div.appendChild(renderLoading());
 
   try {
-    const res = await fetch(`${API_URL}?name=${encodeURIComponent(query)}&role=${encodeURIComponent(role || "")}`);
+    const url =
+      `${API_URL}?mode=search` +
+      `&name=${encodeURIComponent(query)}` +
+      `&role=${encodeURIComponent(role || "")}` +
+      staffQueryParam();
+    const res = await fetch(url);
     const data = await res.json();
 
-    // Backward compatibility: if backend still returns just an array.
+    if (data?.error) {
+      div.innerHTML = "";
+      div.appendChild(
+        renderEmpty(
+          data.error === "Enter your full name (first and last)."
+            ? "Use your full name"
+            : "Could not search",
+          data.error
+        )
+      );
+      showRefreshButton();
+      return;
+    }
+
     if (Array.isArray(data)) {
       div.innerHTML = "";
       if (!data.length) {
@@ -203,27 +420,34 @@ async function runQuery(query, { nameInput, div, btn, role }) {
       return;
     }
 
-    // New format: { choices: [...], results: [...] }
     const choices = Array.isArray(data?.choices) ? data.choices : null;
     const results = Array.isArray(data?.results) ? data.results : null;
-
     const safeChoices = sanitizeChoices(choices);
 
     if (safeChoices && safeChoices.length > 1) {
       div.innerHTML = "";
-      choicesModalEl = showChoicesModal(safeChoices, async selectedName => {
-        if (choicesModalEl) choicesModalEl.remove();
-        await runQuery(selectedName, { nameInput, div, btn, role });
-      }, () => {
-        if (choicesModalEl) choicesModalEl.remove();
-        div.innerHTML = "";
-        div.appendChild(renderEmpty("Cancelled", "Select a name to continue."));
-      });
+      choicesModalEl = showChoicesModal(
+        safeChoices,
+        async selectedName => {
+          if (choicesModalEl) choicesModalEl.remove();
+          nameInput.value = selectedName;
+          await runQuery(selectedName, { nameInput, div, btn, role });
+        },
+        () => {
+          if (choicesModalEl) choicesModalEl.remove();
+          div.innerHTML = "";
+          div.appendChild(renderEmpty("Cancelled", "Select a name to continue."));
+        }
+      );
       return;
     }
 
-    if (safeChoices && safeChoices.length === 1 && (!results || results.length === 0) && safeChoices[0] !== query) {
-      // Backend might return only a single resolved choice for an ambiguous keyword.
+    if (
+      safeChoices &&
+      safeChoices.length === 1 &&
+      (!results || results.length === 0) &&
+      safeChoices[0] !== query
+    ) {
       await runQuery(safeChoices[0], { nameInput, div, btn, role });
       return;
     }
@@ -240,7 +464,6 @@ async function runQuery(query, { nameInput, div, btn, role }) {
     results.forEach(e => div.appendChild(createEventCard(e)));
     scheduleResultsReset(div);
     showRefreshButton();
-
   } catch (err) {
     console.error(err);
     div.innerHTML = "";
@@ -248,7 +471,6 @@ async function runQuery(query, { nameInput, div, btn, role }) {
     scheduleResultsReset(div);
     showRefreshButton();
   } finally {
-    // If a modal is open (role choice or name choice), keep form disabled.
     const anyModalOpen = document.querySelector(".modalOverlay");
     if (!anyModalOpen) {
       btn.disabled = false;
@@ -260,8 +482,6 @@ async function runQuery(query, { nameInput, div, btn, role }) {
 function sanitizeChoices(choices) {
   if (!Array.isArray(choices)) return null;
 
-  // Remove non-name / generic tokens that your backend may accidentally capture.
-  // Examples observed: "Student Vega", "Students Vega", "x Mang"
   const out = [];
   const seen = new Set();
 
@@ -282,16 +502,10 @@ function sanitizeChoices(choices) {
 }
 
 function extractNameByRole(rawQuery, role) {
-  // Student is the part BEFORE 'x', Tutor is the part AFTER 'x'.
-  // Example: "Kelvin Mang x Mang Hao Jian"
   const q = (rawQuery || "").trim();
   const m = q.match(/^(.*?)\s+x\s+(.*)$/i);
 
-  if (!m) {
-    // If there is no delimiter in the user's input, just search the query as-is.
-    // Backend role filtering (before/after x in the calendar record) will handle correctness.
-    return q;
-  }
+  if (!m) return q;
 
   const studentPart = (m[1] || "").trim();
   const tutorPart = (m[2] || "").trim();
@@ -356,7 +570,6 @@ function showChoicesModal(choices, onPick, onCancel, { titleText, subText, modal
   modal.appendChild(body);
   overlay.appendChild(modal);
 
-  // Clicking outside the modal cancels.
   overlay.addEventListener("click", e => {
     if (e.target === overlay) onCancel();
   });
@@ -364,3 +577,143 @@ function showChoicesModal(choices, onPick, onCancel, { titleText, subText, modal
   document.body.appendChild(overlay);
   return overlay;
 }
+
+// ===== Floor board =====
+
+function refreshBoard() {
+  loadBoard();
+}
+
+async function loadBoard({ silent } = {}) {
+  const board = document.getElementById("board");
+  const dateLabel = document.getElementById("boardDateLabel");
+  const refreshBtn = document.getElementById("boardRefreshBtn");
+
+  if (!board) return;
+
+  cancelBoardRefresh();
+
+  if (!silent) {
+    board.innerHTML = "";
+    board.appendChild(renderLoading("Loading floor board…"));
+    if (dateLabel) dateLabel.textContent = "Loading today’s schedule…";
+  }
+
+  if (refreshBtn) refreshBtn.disabled = true;
+
+  try {
+    const res = await fetch(`${API_URL}?mode=board${staffQueryParam()}`);
+    const data = await res.json();
+
+    if (data?.error || !data || !data.floors) {
+      throw new Error(data?.error || "Invalid board payload");
+    }
+
+    boardData = data;
+    if (dateLabel) {
+      dateLabel.textContent = formatBoardDate(data.date);
+    }
+
+    const preferred = BOARD_FLOORS.find(f => (data.floors[f] || []).length > 0);
+    if (preferred && !(boardData.floors[activeFloor] || []).length) {
+      setActiveFloor(preferred);
+    } else {
+      setActiveFloor(activeFloor);
+    }
+
+    renderBoard();
+    scheduleBoardRefresh();
+  } catch (err) {
+    console.error(err);
+    board.innerHTML = "";
+    board.appendChild(
+      renderEmpty("Could not load floor board", "Check the Apps Script deploy, then tap Refresh.")
+    );
+    if (dateLabel) dateLabel.textContent = "Unavailable";
+    scheduleBoardRefresh();
+  } finally {
+    if (refreshBtn) refreshBtn.disabled = false;
+  }
+}
+
+function renderBoard() {
+  const board = document.getElementById("board");
+  if (!board) return;
+
+  board.innerHTML = "";
+
+  if (!boardData || !boardData.floors) {
+    board.appendChild(renderEmpty("No data", "Open Floor board again to reload."));
+    return;
+  }
+
+  const lessons = [...(boardData.floors[activeFloor] || [])].sort(
+    (a, b) => new Date(a.start) - new Date(b.start)
+  );
+
+  if (!lessons.length) {
+    board.appendChild(
+      renderEmpty(
+        `No on-site lessons on ${activeFloor}/F today.`,
+        "Try another floor, or use Find my lesson."
+      )
+    );
+    return;
+  }
+
+  const schedule = document.createElement("div");
+  schedule.className = "scheduleList";
+
+  const colHead = document.createElement("div");
+  colHead.className = "scheduleHead";
+  colHead.innerHTML = `
+    <span>Time</span>
+    <span>Student</span>
+    <span>Room</span>
+  `;
+  schedule.appendChild(colHead);
+
+  lessons.forEach(lesson => {
+    schedule.appendChild(createScheduleRow(lesson));
+  });
+
+  board.appendChild(schedule);
+}
+
+function createScheduleRow(lesson) {
+  const row = document.createElement("div");
+  row.className = "scheduleRow";
+
+  const time = document.createElement("div");
+  time.className = "scheduleTime";
+  time.textContent = formatBoardTimeRange(lesson.start, lesson.end);
+
+  const name = document.createElement("div");
+  name.className = "scheduleName";
+  name.textContent = cleanBoardStudentName(lesson.student) || "Group class";
+
+  const room = document.createElement("div");
+  room.className = "scheduleRoom";
+  const code = document.createElement("span");
+  code.className = "scheduleRoomCode";
+  code.textContent = lesson.room || "TBC";
+  room.appendChild(code);
+
+  row.appendChild(time);
+  row.appendChild(name);
+  row.appendChild(room);
+  return row;
+}
+
+function cleanBoardStudentName(raw) {
+  const val = String(raw || "").trim();
+  if (!val) return "";
+  const lower = val.toLowerCase();
+  // Guard against old API payloads that returned subject fragments.
+  if (/^(igcse|gcse|ib|alevel|cie)\b/i.test(val)) return "Group class";
+  if (lower === "lesson" || lower === "group class") return "Group class";
+  return val;
+}
+
+initModeSwitch();
+applyAccessMode();

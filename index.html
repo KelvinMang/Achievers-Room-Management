@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Room Finder</title>
   <link rel="icon" type="image/png" href="./favicon.png" />
-  <link rel="stylesheet" href="./styles.css?v=4" />
+  <link rel="stylesheet" href="./styles.css?v=8" />
 </head>
 <body>
   <div class="wrap">
@@ -13,19 +13,30 @@
       <div class="brand">
         <img class="logo" src="./Achievers_Logo_White_RGB.png" alt="The Achievers logo" />
         <div class="brandText">
-          <p class="title">Achievers Student Lesson Finder</p>
-          <p class="subtitle">Find your lesson time and room for today.</p>
+          <p class="title">Achievers Lesson Finder</p>
+          <p class="subtitle" id="appSubtitle">Enter your full name to find today’s room.</p>
         </div>
       </div>
     </header>
 
+    <nav class="modeSwitch" id="modeSwitch" aria-label="View mode" role="tablist" hidden>
+      <button type="button" class="modeBtn is-active" id="modeSearchBtn" role="tab" aria-selected="true" data-mode="search">
+        Find my lesson
+      </button>
+      <button type="button" class="modeBtn" id="modeBoardBtn" role="tab" aria-selected="false" data-mode="board">
+        Floor board
+      </button>
+    </nav>
+
+    <p class="staffBadge" id="staffBadge" hidden>Staff / kiosk mode</p>
+
     <main>
-      <section class="panel" aria-label="Search panel">
+      <section class="panel" id="searchPanel" aria-label="Search panel">
         <div class="panelInner">
           <form class="searchRow" autocomplete="off" onsubmit="event.preventDefault(); search();">
             <div class="field">
-              <label for="name">Student / Teacher name</label>
-              <input id="name" type="text" name="lesson-query" autocomplete="off" placeholder="Enter student or tutor name (e.g. Peter Chan)" />
+              <label for="name" id="nameLabel">Your full name</label>
+              <input id="name" type="text" name="lesson-query" autocomplete="off" placeholder="e.g. Peter Chan" />
             </div>
             <div class="searchBtnWrap">
               <button type="submit" id="searchBtn">Search</button>
@@ -39,9 +50,31 @@
           <div id="results" class="results" role="status" aria-live="polite"></div>
         </div>
       </section>
+
+      <section class="panel" id="boardPanel" aria-label="Floor board" hidden>
+        <div class="panelInner">
+          <div class="boardHeader">
+            <div>
+              <p class="boardTitle">Today’s rooms — Wan Chai</p>
+              <p class="boardSub" id="boardDateLabel">Loading today’s schedule…</p>
+            </div>
+            <button type="button" id="boardRefreshBtn" class="btnRefresh" onclick="refreshBoard()">Refresh</button>
+          </div>
+
+          <div class="floorTabs" id="floorTabs" role="tablist" aria-label="Floor">
+            <button type="button" class="floorTab is-active" data-floor="13" role="tab" aria-selected="true">13/F</button>
+            <button type="button" class="floorTab" data-floor="10" role="tab" aria-selected="false">10/F</button>
+            <button type="button" class="floorTab" data-floor="8" role="tab" aria-selected="false">8/F</button>
+          </div>
+
+          <p class="boardHint">Scan for your name · room is on the right</p>
+
+          <div id="board" class="board" role="status" aria-live="polite"></div>
+        </div>
+      </section>
     </main>
   </div>
 
-  <script src="./app.js?v=2"></script>
+  <script src="./app.js?v=8"></script>
 </body>
 </html>
