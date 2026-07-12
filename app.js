@@ -119,7 +119,8 @@ function initDayNav() {
 function resolveAccessMode() {
   const params = new URLSearchParams(window.location.search);
   const staffFromUrl = (params.get("staff") || "").trim();
-  const tutorFromUrl = (params.get("tutor") || "").trim();
+  // Tutor link is simply ?tutor (no secret in the URL).
+  const tutorFlag = params.has("tutor");
 
   if (staffFromUrl && staffFromUrl === STAFF_KEY) {
     sessionStorage.setItem(STAFF_SESSION_KEY, STAFF_KEY);
@@ -127,8 +128,8 @@ function resolveAccessMode() {
     return { staff: true, tutor: false };
   }
 
-  if (tutorFromUrl && tutorFromUrl === TUTOR_KEY) {
-    sessionStorage.setItem(TUTOR_SESSION_KEY, TUTOR_KEY);
+  if (tutorFlag) {
+    sessionStorage.setItem(TUTOR_SESSION_KEY, "1");
     sessionStorage.removeItem(STAFF_SESSION_KEY);
     return { staff: false, tutor: true };
   }
@@ -136,15 +137,12 @@ function resolveAccessMode() {
   if (staffFromUrl && staffFromUrl !== STAFF_KEY) {
     sessionStorage.removeItem(STAFF_SESSION_KEY);
   }
-  if (tutorFromUrl && tutorFromUrl !== TUTOR_KEY) {
-    sessionStorage.removeItem(TUTOR_SESSION_KEY);
-  }
 
   // Prefer staff session if both somehow exist.
   if (sessionStorage.getItem(STAFF_SESSION_KEY) === STAFF_KEY) {
     return { staff: true, tutor: false };
   }
-  if (sessionStorage.getItem(TUTOR_SESSION_KEY) === TUTOR_KEY) {
+  if (sessionStorage.getItem(TUTOR_SESSION_KEY) === "1") {
     return { staff: false, tutor: true };
   }
 
