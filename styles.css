@@ -136,6 +136,24 @@ button.floorTab.is-active{
   letter-spacing:.02em;
 }
 
+.helpNote{
+  margin:18px 0 0;
+  padding:14px 16px;
+  border-radius:14px;
+  border:1px solid rgba(12, 26, 54, .10);
+  background: rgba(0, 36, 125, .04);
+  color: var(--muted);
+  font-size:14px;
+  font-weight:600;
+  line-height:1.5;
+}
+
+.empty .helpNote{
+  margin-top:16px;
+  text-align:left;
+  max-width:520px;
+}
+
 .dayNav{
   display:flex;
   align-items:center;
@@ -1105,6 +1123,12 @@ button.btnRefresh:active{
 
   .empty .hint{
     font-size:16px;
+  }
+
+  .helpNote{
+    margin-top:14px;
+    padding:12px 14px;
+    font-size:13px;
   }
 
   .modalOverlay{

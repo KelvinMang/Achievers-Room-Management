@@ -1,24 +1,24 @@
-# Deploy notes — Student link + Staff / kiosk (same website)
+# Deploy notes — Student / Tutor / Staff (same website)
 
-Yes — this works on **GitHub Pages**. It is still one static site. Students and staff use the **same URL**, with staff unlocking extra features via a query param.
+Yes — this works on **GitHub Pages**. One static site; access is split by URL query params.
 
 ## Links (same GitHub Pages site)
 
 | Who | Link | What they see |
 | --- | --- | --- |
-| **Students (share this)** | `https://YOUR_GITHUB_PAGES_URL/` | Full-name search only. No Floor board. No tutor search. Results hide full calendar titles. |
+| **Students (share this)** | `https://YOUR_GITHUB_PAGES_URL/` | Student search + Today/Tomorrow. Name picker if several match. Help text to visit 1012. No Floor board. |
+| **Tutors** | `https://YOUR_GITHUB_PAGES_URL/?tutor=YOUR_TUTOR_KEY` | Tutor-name search only (find their rooms). No Floor board. |
 | **Staff / reception kiosk** | `https://YOUR_GITHUB_PAGES_URL/?staff=YOUR_STAFF_KEY` | Floor board + Student/Tutor search. |
 
-`STAFF_KEY` lives in [`app.js`](./app.js) and [`Code.gs`](./Code.gs) — keep them identical. **Do not put the real staff key or staff URL in the README** (public repos expose it).
-
-> Note: a key in frontend source is not bank-grade security. Apps Script still **rejects** board/tutor access without the key, which stops casual misuse from the student link.
+Keys live in [`app.js`](./app.js) and [`Code.gs`](./Code.gs) — keep them identical. **Do not put real keys in the README.**
 
 ## 1. Update Google Apps Script
 
 1. Replace `Code.gs` with the repo file [`Code.gs`](./Code.gs).
-2. Confirm `STAFF_KEY` matches `app.js`.
-3. **Deploy → Manage deployments → Edit → New version → Deploy**.
-4. If the `/exec` URL changes, update `API_URL` in `app.js`.
+2. Confirm `STAFF_KEY` / `TUTOR_KEY` match `app.js`.
+3. Set the Apps Script project timezone to **Hong Kong** (File → Project settings) if possible.
+4. **Deploy → Manage deployments → Edit → New version → Deploy**.
+5. If the `/exec` URL changes, update `API_URL` in `app.js`.
 
 ## 2. Push the frontend (GitHub Pages)
 
@@ -26,30 +26,17 @@ Push to `main`. [`.github/workflows/static.yml`](./.github/workflows/static.yml)
 
 ## 3. Smoke tests
 
-**Student link (no `?staff=`):**
+**Student link**
 
-- Floor board tabs are hidden
-- Searching a partial name (e.g. `Jayden`) → name picker if several match
-- After choosing a name → only that student’s time/room (no full lesson title)
+- Partial name → picker if several people match
+- `Dan` should find lessons (not a dead `Dan, Dan` choice)
+- Help note about Room 1012 is visible
 
-**Staff link (`?staff=...`):**
+**Tutor link (`?tutor=...`)**
 
-- Mode switch appears (Find my lesson | Floor board)
-- Tutor search works
-- Floor board loads
+- Searches tutor side of titles / `Tutor:` description
+- No Floor board tab
 
-**API checks:**
+**Staff link (`?staff=...`)**
 
-```
-YOUR_API_URL?mode=board
-→ { "error": "Staff access required", ... }
-
-YOUR_API_URL?mode=board&key=YOUR_STAFF_KEY
-→ { "date": "...", "floors": { ... } }
-
-YOUR_API_URL?mode=search&name=Peter&role=student
-→ full-name error
-
-YOUR_API_URL?mode=search&name=Peter%20Chan&role=student
-→ results without title
-```
+- Floor board + Student/Tutor search

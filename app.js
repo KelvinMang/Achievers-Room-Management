@@ -1,12 +1,17 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbyOkNPd7RTUgtISDDqy8B8VLtJtgF_myu84RXbfzRihD1G1QmJQu2cPeJW1iMVf5PxZow/exec";
 
-/** Must match STAFF_KEY in Code.gs. Change both when rotating. */
+/** Must match keys in Code.gs. Change both sides when rotating. */
 const STAFF_KEY = "achievers-wc-staff-2026";
+const TUTOR_KEY = "achievers-tutor-2026";
 const STAFF_SESSION_KEY = "achievers_staff_key";
+const TUTOR_SESSION_KEY = "achievers_tutor_key";
 
 const RESULTS_RESET_MS = 60 * 1000;
 const BOARD_REFRESH_MS = 60 * 1000;
 const BOARD_FLOORS = ["13", "10", "8"];
+
+const STUDENT_HELP_TEXT =
+  "If you can't find your room in this portal, please go to Room 1012, 10/F, Tai Yau Building, 181 Johnston Road, Wan Chai and check our Room Management Desktop regarding today's floor board. If you really can't find it, please contact +852 5727 1209 for help. Thanks";
 
 let resultsResetTimerId = null;
 let boardRefreshTimerId = null;
@@ -14,6 +19,7 @@ let boardData = null;
 let activeFloor = "13";
 let currentMode = "search";
 let staffMode = false;
+let tutorMode = false;
 /** "today" | "tomorrow" — shared by search + floor board */
 let selectedDay = "today";
 let lastSearchQuery = null;
@@ -110,43 +116,79 @@ function initDayNav() {
   updateDayNavUI();
 }
 
-function resolveStaffMode() {
+function resolveAccessMode() {
   const params = new URLSearchParams(window.location.search);
-  const fromUrl = (params.get("staff") || "").trim();
+  const staffFromUrl = (params.get("staff") || "").trim();
+  const tutorFromUrl = (params.get("tutor") || "").trim();
 
-  if (fromUrl && fromUrl === STAFF_KEY) {
+  if (staffFromUrl && staffFromUrl === STAFF_KEY) {
     sessionStorage.setItem(STAFF_SESSION_KEY, STAFF_KEY);
-    return true;
+    sessionStorage.removeItem(TUTOR_SESSION_KEY);
+    return { staff: true, tutor: false };
   }
 
-  if (fromUrl && fromUrl !== STAFF_KEY) {
+  if (tutorFromUrl && tutorFromUrl === TUTOR_KEY) {
+    sessionStorage.setItem(TUTOR_SESSION_KEY, TUTOR_KEY);
     sessionStorage.removeItem(STAFF_SESSION_KEY);
-    return false;
+    return { staff: false, tutor: true };
   }
 
-  return sessionStorage.getItem(STAFF_SESSION_KEY) === STAFF_KEY;
+  if (staffFromUrl && staffFromUrl !== STAFF_KEY) {
+    sessionStorage.removeItem(STAFF_SESSION_KEY);
+  }
+  if (tutorFromUrl && tutorFromUrl !== TUTOR_KEY) {
+    sessionStorage.removeItem(TUTOR_SESSION_KEY);
+  }
+
+  // Prefer staff session if both somehow exist.
+  if (sessionStorage.getItem(STAFF_SESSION_KEY) === STAFF_KEY) {
+    return { staff: true, tutor: false };
+  }
+  if (sessionStorage.getItem(TUTOR_SESSION_KEY) === TUTOR_KEY) {
+    return { staff: false, tutor: true };
+  }
+
+  return { staff: false, tutor: false };
 }
 
-function staffQueryParam() {
-  return staffMode ? `&key=${encodeURIComponent(STAFF_KEY)}` : "";
+function accessQueryParam() {
+  if (staffMode) return `&key=${encodeURIComponent(STAFF_KEY)}`;
+  if (tutorMode) return `&key=${encodeURIComponent(TUTOR_KEY)}`;
+  return "";
 }
 
 function applyAccessMode() {
-  staffMode = resolveStaffMode();
+  const access = resolveAccessMode();
+  staffMode = access.staff;
+  tutorMode = access.tutor;
 
   const modeSwitch = document.getElementById("modeSwitch");
   const staffBadge = document.getElementById("staffBadge");
   const subtitle = document.getElementById("appSubtitle");
   const nameLabel = document.getElementById("nameLabel");
   const nameInput = document.getElementById("name");
+  const helpEl = document.getElementById("studentHelp");
 
   if (modeSwitch) modeSwitch.hidden = !staffMode;
-  if (staffBadge) staffBadge.hidden = !staffMode;
+  if (staffBadge) {
+    staffBadge.hidden = !(staffMode || tutorMode);
+    staffBadge.textContent = staffMode
+      ? "Staff / kiosk mode"
+      : tutorMode
+        ? "Tutor mode"
+        : "";
+  }
+  if (helpEl) helpEl.hidden = !!(staffMode || tutorMode);
 
   if (staffMode) {
     if (subtitle) subtitle.textContent = "Staff mode — search or open the floor board.";
     if (nameLabel) nameLabel.textContent = "Student / Tutor name";
     if (nameInput) nameInput.placeholder = "Enter student or tutor name (e.g. Peter Chan)";
+  } else if (tutorMode) {
+    if (subtitle) subtitle.textContent = "Tutor mode — search your name to find today’s rooms.";
+    if (nameLabel) nameLabel.textContent = "Your tutor name";
+    if (nameInput) nameInput.placeholder = "e.g. Robert Cairns or Jay";
+    setMode("search");
   } else {
     if (subtitle) subtitle.textContent = "Search your name to find your room (today or tomorrow).";
     if (nameLabel) nameLabel.textContent = "Your name";
@@ -289,23 +331,26 @@ async function search() {
         "Enter your name",
         staffMode
           ? "Type a student or tutor name and press Search."
-          : "Type your name and press Search. If a few people match, you’ll pick yours."
+          : tutorMode
+            ? "Type your tutor name and press Search."
+            : "Type your name and press Search. If a few people match, you’ll pick yours."
       )
     );
     return;
   }
 
-  if (!staffMode && rawQuery.replace(/\s+/g, "").length < 3) {
+  if (!staffMode && !tutorMode && rawQuery.replace(/\s+/g, "").length < 3) {
     div.appendChild(
       renderEmpty("Name too short", "Enter at least 3 letters of your name.")
     );
     return;
   }
 
-  // Public: always student lookup (may show name picker if several match).
+  // Public students & tutors: go straight to search (with name picker if needed).
   // Staff: ask Student vs Tutor first.
   if (!staffMode) {
-    await runQuery(rawQuery, { nameInput, div, btn, role: "student" });
+    const role = tutorMode ? "tutor" : "student";
+    await runQuery(rawQuery, { nameInput, div, btn, role });
     return;
   }
 
@@ -396,6 +441,14 @@ function renderEmpty(mainText, subText) {
 
   wrap.appendChild(hint);
   if (subText) wrap.appendChild(p);
+
+  if (!staffMode && !tutorMode) {
+    const help = document.createElement("p");
+    help.className = "helpNote";
+    help.textContent = STUDENT_HELP_TEXT;
+    wrap.appendChild(help);
+  }
+
   return wrap;
 }
 
@@ -410,7 +463,11 @@ function createEventCard(e) {
 
   const title = document.createElement("p");
   title.className = "cardTitle";
-  title.textContent = e.student || e.title || "Lesson";
+  if (tutorMode) {
+    title.textContent = e.tutor || e.title || "Lesson";
+  } else {
+    title.textContent = e.student || e.title || "Lesson";
+  }
 
   const start = formatTime(e.start);
   const end = formatTime(e.end);
@@ -442,8 +499,8 @@ function createEventCard(e) {
   kv.appendChild(kvItem("Location", location));
   kv.appendChild(kvItem("Room", room));
 
-  // Staff only: full calendar title can reveal tutors / classmates.
-  if (staffMode && e.title && e.student && e.title !== e.student) {
+  // Staff/tutor links may show the full calendar title.
+  if ((staffMode || tutorMode) && e.title) {
     kv.appendChild(kvItem("Lesson", e.title));
   }
 
@@ -485,7 +542,7 @@ async function runQuery(query, { nameInput, div, btn, role }) {
       `&name=${encodeURIComponent(query)}` +
       `&role=${encodeURIComponent(role || "")}` +
       dayQueryParam() +
-      staffQueryParam();
+      accessQueryParam();
     lastSearchQuery = query;
     lastSearchRole = role || "student";
     const res = await fetch(url);
@@ -583,11 +640,23 @@ function sanitizeChoices(choices) {
   const seen = new Set();
 
   choices.forEach(c => {
-    const val = String(c || "").trim();
+    let val = String(c || "").trim();
     if (!val) return;
     if (/^x\b/i.test(val)) return;
     if (/^students?\b/i.test(val)) return;
     if (/^(tutor|teacher)s?\b/i.test(val)) return;
+
+    // Collapse "Dan, Dan" / duplicate tokens
+    const parts = val
+      .split(/[\s,+/&]+/)
+      .map(p => p.replace(/[^A-Za-z'\-]/g, ""))
+      .filter(Boolean);
+    const uniq = [];
+    parts.forEach(p => {
+      if (!uniq.some(u => u.toLowerCase() === p.toLowerCase())) uniq.push(p);
+    });
+    val = uniq.slice(0, 3).join(" ");
+    if (!val) return;
 
     const norm = val.toLowerCase();
     if (seen.has(norm)) return;
@@ -699,7 +768,7 @@ async function loadBoard({ silent } = {}) {
   if (refreshBtn) refreshBtn.disabled = true;
 
   try {
-    const res = await fetch(`${API_URL}?mode=board${dayQueryParam()}${staffQueryParam()}`);
+    const res = await fetch(`${API_URL}?mode=board${dayQueryParam()}${accessQueryParam()}`);
     const data = await res.json();
 
     if (data?.error || !data || !data.floors) {

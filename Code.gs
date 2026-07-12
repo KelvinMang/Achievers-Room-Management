@@ -4,15 +4,17 @@
  * Deploy as Web App (Execute as: Me, Who has access: Anyone).
  * Endpoints:
  *   ?mode=board&day=today|tomorrow&key=STAFF_KEY
- *   ?mode=search&name=...&role=...&day=today|tomorrow&key=...
+ *   ?mode=search&name=...&role=...&day=today|tomorrow&key=STAFF_KEY|TUTOR_KEY
  *
  * Public (no key): student role only, no lesson titles.
- *   Partial names OK — if several students match, return name choices for the UI.
- * Staff (valid key): tutor search + floor board unlocked.
+ * Tutor key: tutor search only (no floor board).
+ * Staff key: student + tutor search + floor board.
  *
- * Keep STAFF_KEY in sync with app.js.
+ * Keep STAFF_KEY / TUTOR_KEY in sync with app.js.
  */
 var STAFF_KEY = "achievers-wc-staff-2026";
+var TUTOR_KEY = "achievers-tutor-2026";
+var SCRIPT_TZ = "Asia/Hong_Kong";
 
 var WAN_CHAI_CALENDAR_ID = "admin@achievershk.com";
 var PRINCE_EDWARD_CALENDAR_ID =
@@ -78,21 +80,29 @@ var PAREN_NOISE = {
 function doGet(e) {
   var params = (e && e.parameter) || {};
   var mode = String(params.mode || "search").toLowerCase().trim();
-  var staff = isStaffRequest(params);
+  var access = resolveAccess(params);
 
   if (mode === "board") {
-    if (!staff) {
+    if (!access.staff) {
       return json({ error: "Staff access required", floors: null });
     }
     return json(buildBoard(params));
   }
 
-  return json(runSearch(params, staff));
+  return json(runSearch(params, access));
 }
 
-function isStaffRequest(params) {
+function resolveAccess(params) {
   var key = String((params && params.key) || "").trim();
-  return !!STAFF_KEY && key === STAFF_KEY;
+  var staff = !!STAFF_KEY && key === STAFF_KEY;
+  var tutor = !!TUTOR_KEY && key === TUTOR_KEY;
+  return {
+    staff: staff,
+    tutor: tutor,
+    // Staff can search both roles; tutor key is tutor-only.
+    canSearchTutor: staff || tutor,
+    canSearchStudent: staff || (!staff && !tutor)
+  };
 }
 
 // ===== Board =====
@@ -121,7 +131,7 @@ function buildBoard(params) {
 
     floors[floor].push({
       title: title,
-      student: extractStudentDisplayName(title),
+      student: extractStudentDisplayName(title, desc),
       start: ev.getStartTime(),
       end: ev.getEndTime(),
       room: roomData.raw,
@@ -137,26 +147,30 @@ function buildBoard(params) {
 
   return {
     day: day,
-    date: Utilities.formatDate(range.start, Session.getScriptTimeZone(), "yyyy-MM-dd"),
+    date: Utilities.formatDate(range.start, SCRIPT_TZ, "yyyy-MM-dd"),
     floors: floors
   };
 }
 
 // ===== Search =====
 
-function runSearch(params, staff) {
+function runSearch(params, access) {
   var name = String(params.name || "").toLowerCase().trim();
   var role = String(params.role || "").toLowerCase().trim();
   var day = normalizeDay(params.day);
+  var staff = !!(access && access.staff);
+  var tutorOnly = !!(access && access.tutor) && !staff;
 
   if (!name) {
     return { error: "Missing name", results: [], choices: [] };
   }
 
-  // Public link: students only (no tutor browse / no floor board).
-  if (!staff) {
+  // Access rules
+  if (tutorOnly) {
+    role = "tutor";
+  } else if (!staff) {
+    // Public student link
     role = "student";
-    // Avoid ultra-short lookups like "a" / "li"
     if (name.replace(/\s+/g, "").length < 3) {
       return {
         error: "Enter at least 3 letters of your name.",
@@ -167,22 +181,24 @@ function runSearch(params, staff) {
   }
 
   if (role !== "student" && role !== "tutor") {
-    role = staff ? role : "student";
+    role = tutorOnly ? "tutor" : "student";
   }
-  if (!staff && role === "tutor") {
+  if (!staff && !tutorOnly && role === "tutor") {
     role = "student";
+  }
+  if (tutorOnly && role !== "tutor") {
+    role = "tutor";
   }
 
   var calendars = [WAN_CHAI_CALENDAR_ID, PRINCE_EDWARD_CALENDAR_ID];
-  var queryKeywords = name.split(/\s+/).filter(Boolean);
+  var queryKeywords = tokenizeNameQuery(name);
   var keyword = queryKeywords.length === 1 ? queryKeywords[0] : "";
-  // Ask to disambiguate on single-keyword searches, or whenever public finds multiple students.
   var shouldAskChoice = !!(keyword && (role === "student" || role === "tutor"));
 
   var range = dayRange(day);
   var results = [];
   var choiceSet = {};
-  var studentNameSet = {};
+  var personNameSet = {};
 
   getEventsForCalendars(calendars, range.start, range.end).forEach(function (item) {
     var ev = item.ev;
@@ -196,27 +212,45 @@ function runSearch(params, staff) {
     var combinedLower = rawCombined.toLowerCase();
     var split = splitTitleByRole(title);
 
+    var displayPerson =
+      role === "tutor"
+        ? extractTutorDisplayName(title, desc)
+        : extractStudentDisplayName(title, desc);
+
     var targetSegment = "";
     if (role === "student") {
-      targetSegment = split.student.toLowerCase();
+      targetSegment = (
+        split.student +
+        " " +
+        extractStudentsFromDescription(desc) +
+        " " +
+        displayPerson
+      ).toLowerCase();
     } else if (role === "tutor") {
-      targetSegment = split.tutor.toLowerCase();
+      targetSegment = (
+        split.tutor +
+        " " +
+        extractTutorFromDescription(desc) +
+        " " +
+        displayPerson
+      ).toLowerCase();
     } else {
       targetSegment = combinedLower;
     }
 
     if (!matchName(targetSegment, name)) return;
 
-    var online = isOnline(combinedLower);
+    // Skip online for on-site room finder results? Keep online for search (student/tutor still want it).
+    var online = isOnline(combinedLower) || isOnlineMode(desc);
     var roomData = extractRoom(title, desc, locationField);
-    var studentName = extractStudentDisplayName(title);
 
-    if (studentName && studentName !== "Group class" && studentName !== "Lesson") {
-      studentNameSet[studentName] = true;
+    if (displayPerson && displayPerson !== "Group class" && displayPerson !== "Lesson") {
+      personNameSet[displayPerson] = true;
     }
 
     var row = {
-      student: studentName,
+      student: role === "tutor" ? extractStudentDisplayName(title, desc) : displayPerson,
+      tutor: role === "tutor" ? displayPerson : extractTutorDisplayName(title, desc),
       start: ev.getStartTime(),
       end: ev.getEndTime(),
       location: detectLocation(id),
@@ -225,35 +259,37 @@ function runSearch(params, staff) {
       roomFormatted: online ? "" : roomData.formatted
     };
 
-    // Full calendar titles can reveal tutors / other students — staff only.
-    if (staff) {
+    // Full calendar titles — staff/tutor links only (not public student).
+    if (staff || tutorOnly) {
       row.title = title;
     }
 
     results.push(row);
 
     if (shouldAskChoice || !staff) {
-      var segmentRaw = getRoleSegmentRaw(rawCombined, role);
+      var segmentRaw =
+        role === "tutor"
+          ? split.tutor + " " + extractTutorFromDescription(desc)
+          : split.student + " " + extractStudentsFromDescription(desc);
       extractNameChoicesFromSegment(segmentRaw, keyword || name).forEach(function (c) {
-        choiceSet[c] = true;
+        var cleanedChoice = cleanPersonChoice(c);
+        if (cleanedChoice) choiceSet[cleanedChoice] = true;
       });
-      if (studentName && studentName !== "Group class" && studentName !== "Lesson") {
-        choiceSet[studentName] = true;
-      }
+      var cleanedPerson = cleanPersonChoice(displayPerson);
+      if (cleanedPerson) choiceSet[cleanedPerson] = true;
     }
   });
 
-  // Prefer clean student display names when disambiguating students.
-  var choices = Object.keys(choiceSet);
-  if (role === "student") {
-    var fromStudents = Object.keys(studentNameSet);
-    if (fromStudents.length >= 1) {
-      choices = fromStudents;
-    }
+  // Prefer clean person display names when disambiguating.
+  var choices = Object.keys(choiceSet).map(cleanPersonChoice).filter(Boolean);
+  choices = uniqueStrings(choices);
+  var fromPeople = Object.keys(personNameSet).map(cleanPersonChoice).filter(Boolean);
+  fromPeople = uniqueStrings(fromPeople);
+  if (fromPeople.length >= 1) {
+    choices = fromPeople;
   }
 
-  // If several people match a short/partial name, ask the UI to pick one first.
-  if (choices.length > 1 && (shouldAskChoice || !staff)) {
+  if (choices.length > 1 && (shouldAskChoice || !staff || tutorOnly)) {
     return { choices: choices, results: [], day: day };
   }
 
@@ -261,7 +297,13 @@ function runSearch(params, staff) {
     return new Date(a.start) - new Date(b.start);
   });
 
-  return { results: results, choices: [], staff: !!staff, day: day };
+  return {
+    results: results,
+    choices: [],
+    staff: staff,
+    tutor: tutorOnly,
+    day: day
+  };
 }
 
 // ===== Calendar helpers =====
@@ -274,9 +316,18 @@ function normalizeDay(day) {
 
 function dayRange(day) {
   var offset = normalizeDay(day) === "tomorrow" ? 1 : 0;
-  var base = new Date();
-  base.setHours(0, 0, 0, 0);
-  base.setDate(base.getDate() + offset);
+  // Anchor to Hong Kong calendar day (not the script server's local TZ).
+  var todayLocal = Utilities.formatDate(new Date(), SCRIPT_TZ, "yyyy-MM-dd");
+  var parts = todayLocal.split("-");
+  var base = new Date(
+    Number(parts[0]),
+    Number(parts[1]) - 1,
+    Number(parts[2]) + offset,
+    0,
+    0,
+    0,
+    0
+  );
 
   var start = new Date(base);
   start.setHours(0, 0, 0, 0);
@@ -306,31 +357,86 @@ function json(data) {
 // ===== Matching =====
 
 function matchName(text, name) {
-  var keywords = String(name || "")
-    .split(/\s+/)
-    .filter(Boolean)
-    .filter(function (k) {
-      return k !== "x" && k !== "X";
-    });
+  var keywords = tokenizeNameQuery(name);
   if (!keywords.length) return false;
 
   var hay = String(text || "").toLowerCase();
-  return keywords.every(function (k) {
-    var kw = k.toLowerCase();
-    // Word-ish boundary so short tokens like "an" do not match "Annie"
+  return keywords.every(function (kw) {
     var re = new RegExp("(^|[^a-z0-9])" + escapeRegExp(kw) + "([^a-z0-9]|$)", "i");
     if (re.test(hay)) return true;
-    // Substring fallback for longer names / partial typing
     return kw.length >= 3 && hay.indexOf(kw) !== -1;
   });
 }
 
-function escapeRegExp(s) {
-  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function tokenizeNameQuery(name) {
+  return String(name || "")
+    .toLowerCase()
+    .split(/[\s,+/&]+/)
+    .map(function (k) {
+      return k.replace(/[^a-z0-9']/g, "");
+    })
+    .filter(Boolean)
+    .filter(function (k) {
+      return k !== "x";
+    })
+    .filter(function (k, idx, arr) {
+      // Drop duplicate tokens ("dan, dan" → ["dan"])
+      return arr.indexOf(k) === idx;
+    });
+}
+
+function uniqueStrings(arr) {
+  var out = [];
+  var seen = {};
+  (arr || []).forEach(function (s) {
+    var key = String(s || "").toLowerCase();
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push(s);
+  });
+  return out;
+}
+
+function cleanPersonChoice(raw) {
+  var val = String(raw || "").trim();
+  if (!val) return "";
+  if (/^(group class|lesson)$/i.test(val)) return "";
+
+  // "Dan, Dan" / "Dan Dan" → "Dan"
+  var parts = val
+    .split(/[\s,+/&]+/)
+    .map(function (p) {
+      return p.replace(/[^A-Za-z'\-]/g, "");
+    })
+    .filter(Boolean);
+
+  if (!parts.length) return "";
+
+  var uniq = [];
+  parts.forEach(function (p) {
+    if (!uniq.length || uniq[uniq.length - 1].toLowerCase() !== p.toLowerCase()) {
+      // also skip if same token already appears earlier
+      var exists = uniq.some(function (u) {
+        return u.toLowerCase() === p.toLowerCase();
+      });
+      if (!exists) uniq.push(p);
+    }
+  });
+
+  if (uniq.length > 3) uniq = uniq.slice(0, 3);
+  return uniq.join(" ");
 }
 
 function isOnline(text) {
-  return String(text || "").toLowerCase().indexOf("online") !== -1;
+  return /\bonline\b/i.test(String(text || ""));
+}
+
+function isOnlineMode(desc) {
+  return /mode\s*:\s*online/i.test(String(desc || ""));
+}
+
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function isCancelled(title) {
@@ -483,7 +589,10 @@ function extractParentheticalNames(text) {
     });
 
     if (nameParts.length === 1) return nameParts[0];
-    if (nameParts.length > 1) return nameParts.slice(0, 3).join(", ");
+    if (nameParts.length > 1) {
+      // Dedupe repeated names before joining
+      return uniqueStrings(nameParts).slice(0, 3).join(", ");
+    }
   }
   return "";
 }
@@ -502,13 +611,29 @@ function collectLeadingNameTokens(tokens) {
   return nameTokens;
 }
 
-function extractStudentDisplayName(title) {
+function extractStudentsFromDescription(desc) {
+  var m = String(desc || "").match(/students?\s*:\s*([^\n]+)/i);
+  return m ? m[1].replace(/^[\s\-–—]+/, "").trim() : "";
+}
+
+function extractTutorFromDescription(desc) {
+  var m = String(desc || "").match(/tutor\s*:\s*([^\n]+)/i);
+  return m ? m[1].trim() : "";
+}
+
+function extractStudentDisplayName(title, desc) {
   var split = splitTitleByRole(title);
   var studentSide = split.student || "";
 
-  // Group classes often put names in trailing parentheses.
+  var fromDesc = extractStudentsFromDescription(desc || "");
+  if (fromDesc) {
+    var descClean = stripNoiseFromSegment(fromDesc);
+    var descTokens = collectLeadingNameTokens(descClean.split(/\s+/).filter(Boolean));
+    if (descTokens.length) return cleanPersonChoice(descTokens.join(" ")) || descTokens.join(" ");
+  }
+
   var fromParen = extractParentheticalNames(studentSide) || extractParentheticalNames(title);
-  if (fromParen) return fromParen;
+  if (fromParen) return cleanPersonChoice(fromParen) || fromParen;
 
   var cleaned = stripNoiseFromSegment(studentSide);
   if (!cleaned) return "Group class";
@@ -516,23 +641,50 @@ function extractStudentDisplayName(title) {
   var tokens = cleaned.split(/\s+/).filter(Boolean);
   var nameTokens = collectLeadingNameTokens(tokens);
 
-  // Subject-led titles: skip leading stopwords, then take name-like words if any.
   if (!nameTokens.length) {
     var i = 0;
     while (i < tokens.length && isStopwordToken(tokens[i])) i++;
     nameTokens = collectLeadingNameTokens(tokens.slice(i));
   }
 
-  if (nameTokens.length) return nameTokens.join(" ");
+  if (nameTokens.length) {
+    return cleanPersonChoice(nameTokens.join(" ")) || nameTokens.join(" ");
+  }
 
-  // Last resort: never show raw subject codes as a "student"
   return "Group class";
+}
+
+function extractTutorDisplayName(title, desc) {
+  var fromDesc = extractTutorFromDescription(desc || "");
+  if (fromDesc) {
+    var cleanedDesc = stripNoiseFromSegment(fromDesc);
+    var descTokens = collectLeadingNameTokens(cleanedDesc.split(/\s+/).filter(Boolean));
+    if (descTokens.length) return cleanPersonChoice(descTokens.join(" ")) || descTokens.join(" ");
+    if (cleanedDesc) return cleanPersonChoice(cleanedDesc) || cleanedDesc;
+  }
+
+  var split = splitTitleByRole(title);
+  var tutorSide = split.tutor || "";
+  var cleaned = stripNoiseFromSegment(tutorSide);
+  if (!cleaned) return "";
+
+  var tokens = cleaned.split(/\s+/).filter(Boolean);
+  var nameTokens = collectLeadingNameTokens(tokens);
+  if (nameTokens.length) return cleanPersonChoice(nameTokens.join(" ")) || nameTokens.join(" ");
+
+  var first = tokens.filter(function (t) {
+    return looksLikeNameToken(t) || (/^[A-Za-z]{2,}$/.test(t) && !isStopwordToken(t));
+  })[0];
+  return first || cleanPersonChoice(cleaned) || cleaned;
 }
 
 function extractNameChoicesFromSegment(segmentRaw, keyword) {
   if (!segmentRaw || !keyword) return [];
 
-  var kw = String(keyword).toLowerCase();
+  var keywords = tokenizeNameQuery(keyword);
+  var kw = keywords[0] || "";
+  if (!kw) return [];
+
   var cleaned = stripNoiseFromSegment(segmentRaw);
   var parts = cleaned.split(/,|&|\band\b|\+/i).map(function (s) {
     return s.trim();
@@ -545,30 +697,25 @@ function extractNameChoicesFromSegment(segmentRaw, keyword) {
     var lower = part.toLowerCase();
     if (lower.indexOf(kw) === -1) return;
 
-    // Prefer name-like prefix before subject stopwords
     var tokens = part.split(/\s+/).filter(Boolean);
     var nameTokens = [];
     for (var i = 0; i < tokens.length; i++) {
       var t = tokens[i];
-      var tl = t.toLowerCase().replace(/[^a-z]/g, "");
+      var tl = normalizeToken(t);
       if (!tl) continue;
       if (SUBJECT_STOPWORDS[tl]) break;
+      if (!looksLikeNameToken(t) && nameTokens.length) break;
+      if (!looksLikeNameToken(t)) continue;
       nameTokens.push(t);
       if (nameTokens.length >= 3) break;
     }
 
-    var candidate = nameTokens.join(" ").trim();
-    if (!candidate) candidate = part;
-
-    // Keep 1–3 word choices that contain the keyword (allows "Traf", "Lai")
-    var words = candidate.split(/\s+/).filter(Boolean);
-    if (!words.length || words.length > 3) return;
+    var candidate = cleanPersonChoice(nameTokens.join(" "));
+    if (!candidate) return;
     if (candidate.toLowerCase().indexOf(kw) === -1) return;
-
     results[candidate] = true;
   });
 
-  // Also scan token windows around the keyword for "First Last"
   var allTokens = cleaned.match(/[A-Za-z]+/g) || [];
   for (var i = 0; i < allTokens.length; i++) {
     if (allTokens[i].toLowerCase() !== kw) continue;
@@ -577,13 +724,14 @@ function extractNameChoicesFromSegment(segmentRaw, keyword) {
     var prevLower = (prev || "").toLowerCase();
     var nextLower = (next || "").toLowerCase();
 
-    if (prev && prevLower !== "x" && !SUBJECT_STOPWORDS[prevLower]) {
-      results[prev + " " + allTokens[i]] = true;
+    if (prev && prevLower !== "x" && !SUBJECT_STOPWORDS[prevLower] && looksLikeNameToken(prev)) {
+      var left = cleanPersonChoice(prev + " " + allTokens[i]);
+      if (left) results[left] = true;
     }
-    if (next && nextLower !== "x" && !SUBJECT_STOPWORDS[nextLower]) {
-      results[allTokens[i] + " " + next] = true;
+    if (next && nextLower !== "x" && !SUBJECT_STOPWORDS[nextLower] && looksLikeNameToken(next)) {
+      var right = cleanPersonChoice(allTokens[i] + " " + next);
+      if (right) results[right] = true;
     }
-    // Single-token tutor/student names
     results[allTokens[i]] = true;
   }
 
