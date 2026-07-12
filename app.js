@@ -199,7 +199,7 @@ function applyAccessMode() {
   } else if (tutorMode) {
     if (subtitle) subtitle.textContent = "Tutor mode — search your name to find today’s rooms.";
     if (nameLabel) nameLabel.textContent = "Your tutor name";
-    if (nameInput) nameInput.placeholder = "e.g. Robert Cairns or Jay";
+    if (nameInput) nameInput.placeholder = "e.g. Jay or Traf";
     setMode("search");
   } else {
     if (subtitle) subtitle.textContent = "Search your name to find your room (today or tomorrow).";
