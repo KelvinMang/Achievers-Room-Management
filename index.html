@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Room Finder</title>
   <link rel="icon" type="image/png" href="./favicon.png" />
-  <link rel="stylesheet" href="./styles.css?v=8" />
+  <link rel="stylesheet" href="./styles.css?v=10" />
 </head>
 <body>
   <div class="wrap">
@@ -33,6 +33,15 @@
     <main>
       <section class="panel" id="searchPanel" aria-label="Search panel">
         <div class="panelInner">
+          <div class="dayNav" aria-label="Choose day">
+            <button type="button" class="dayArrow" id="searchDayPrev" aria-label="Previous day">‹</button>
+            <div class="dayNavCenter">
+              <p class="dayNavLabel" id="searchDayLabel">Today</p>
+              <p class="dayNavDate" id="searchDayDate"></p>
+            </div>
+            <button type="button" class="dayArrow" id="searchDayNext" aria-label="Next day">›</button>
+          </div>
+
           <form class="searchRow" autocomplete="off" onsubmit="event.preventDefault(); search();">
             <div class="field">
               <label for="name" id="nameLabel">Your full name</label>
@@ -55,8 +64,15 @@
         <div class="panelInner">
           <div class="boardHeader">
             <div>
-              <p class="boardTitle">Today’s rooms — Wan Chai</p>
-              <p class="boardSub" id="boardDateLabel">Loading today’s schedule…</p>
+              <p class="boardTitle" id="boardTitle">Today’s rooms — Wan Chai</p>
+              <div class="dayNav dayNavCompact" aria-label="Choose day">
+                <button type="button" class="dayArrow" id="boardDayPrev" aria-label="Previous day">‹</button>
+                <div class="dayNavCenter">
+                  <p class="dayNavLabel" id="boardDayLabel">Today</p>
+                  <p class="dayNavDate" id="boardDateLabel">Loading…</p>
+                </div>
+                <button type="button" class="dayArrow" id="boardDayNext" aria-label="Next day">›</button>
+              </div>
             </div>
             <button type="button" id="boardRefreshBtn" class="btnRefresh" onclick="refreshBoard()">Refresh</button>
           </div>
@@ -67,7 +83,7 @@
             <button type="button" class="floorTab" data-floor="8" role="tab" aria-selected="false">8/F</button>
           </div>
 
-          <p class="boardHint">Scan for your name · room is on the right</p>
+          <p class="boardHint">Scan for your lesson · room is on the right</p>
 
           <div id="board" class="board" role="status" aria-live="polite"></div>
         </div>
@@ -75,6 +91,6 @@
     </main>
   </div>
 
-  <script src="./app.js?v=8"></script>
+  <script src="./app.js?v=10"></script>
 </body>
 </html>

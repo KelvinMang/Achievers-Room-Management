@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbwEV7iBKurgbB4Mbp5GN8Obo6c9O0VWTyokICMwWmHsgcEdQ6-sleaybFYkq3ep-35yfQ/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbydFi0jCw1lO7JZ7N0dRLaLRLOOGOSH7xuAV8eXKZDjLwi6jhU62w7GQlH715-fcs-y0g/exec";
 
 /** Must match STAFF_KEY in Code.gs. Change both when rotating. */
 const STAFF_KEY = "achievers-wc-staff-2026";
@@ -14,6 +14,101 @@ let boardData = null;
 let activeFloor = "13";
 let currentMode = "search";
 let staffMode = false;
+/** "today" | "tomorrow" — shared by search + floor board */
+let selectedDay = "today";
+let lastSearchQuery = null;
+let lastSearchRole = "student";
+
+function dayQueryParam() {
+  return `&day=${encodeURIComponent(selectedDay)}`;
+}
+
+function dayWord() {
+  return selectedDay === "tomorrow" ? "tomorrow" : "today";
+}
+
+function dayTitleWord() {
+  return selectedDay === "tomorrow" ? "Tomorrow" : "Today";
+}
+
+function getDayDateObject(day) {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  if (day === "tomorrow") d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function formatDayDateLabel(day) {
+  return getDayDateObject(day).toLocaleDateString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric"
+  });
+}
+
+function updateDayNavUI() {
+  const isToday = selectedDay === "today";
+  const label = dayTitleWord();
+  const dateText = formatDayDateLabel(selectedDay);
+
+  const searchLabel = document.getElementById("searchDayLabel");
+  const searchDate = document.getElementById("searchDayDate");
+  const boardLabel = document.getElementById("boardDayLabel");
+  const boardDate = document.getElementById("boardDateLabel");
+  const boardTitle = document.getElementById("boardTitle");
+  const prevSearch = document.getElementById("searchDayPrev");
+  const nextSearch = document.getElementById("searchDayNext");
+  const prevBoard = document.getElementById("boardDayPrev");
+  const nextBoard = document.getElementById("boardDayNext");
+
+  if (searchLabel) searchLabel.textContent = label;
+  if (searchDate) searchDate.textContent = dateText;
+  if (boardLabel) boardLabel.textContent = label;
+  if (boardDate) boardDate.textContent = dateText;
+  if (boardTitle) boardTitle.textContent = `${label}’s rooms — Wan Chai`;
+
+  if (prevSearch) prevSearch.disabled = isToday;
+  if (nextSearch) nextSearch.disabled = !isToday;
+  if (prevBoard) prevBoard.disabled = isToday;
+  if (nextBoard) nextBoard.disabled = !isToday;
+}
+
+async function setSelectedDay(day) {
+  const next = day === "tomorrow" ? "tomorrow" : "today";
+  if (selectedDay === next) return;
+  selectedDay = next;
+  updateDayNavUI();
+
+  if (currentMode === "board" && staffMode) {
+    await loadBoard();
+    return;
+  }
+
+  // Re-run last search when the day changes, if there was one.
+  const nameInput = document.getElementById("name");
+  const div = document.getElementById("results");
+  const btn = document.getElementById("searchBtn");
+  const query = (lastSearchQuery || nameInput?.value || "").trim();
+  if (query && div && btn && nameInput) {
+    await runQuery(query, {
+      nameInput,
+      div,
+      btn,
+      role: lastSearchRole || "student"
+    });
+  } else if (div) {
+    div.innerHTML = "";
+    hideRefreshButton();
+  }
+}
+
+function initDayNav() {
+  document.getElementById("searchDayPrev")?.addEventListener("click", () => setSelectedDay("today"));
+  document.getElementById("searchDayNext")?.addEventListener("click", () => setSelectedDay("tomorrow"));
+  document.getElementById("boardDayPrev")?.addEventListener("click", () => setSelectedDay("today"));
+  document.getElementById("boardDayNext")?.addEventListener("click", () => setSelectedDay("tomorrow"));
+  updateDayNavUI();
+}
 
 function resolveStaffMode() {
   const params = new URLSearchParams(window.location.search);
@@ -53,7 +148,7 @@ function applyAccessMode() {
     if (nameLabel) nameLabel.textContent = "Student / Tutor name";
     if (nameInput) nameInput.placeholder = "Enter student or tutor name (e.g. Peter Chan)";
   } else {
-    if (subtitle) subtitle.textContent = "Enter your full name to find today’s room.";
+    if (subtitle) subtitle.textContent = "Enter your full name to find your room (today or tomorrow).";
     if (nameLabel) nameLabel.textContent = "Your full name";
     if (nameInput) nameInput.placeholder = "e.g. Peter Chan";
     setMode("search");
@@ -388,7 +483,10 @@ async function runQuery(query, { nameInput, div, btn, role }) {
       `${API_URL}?mode=search` +
       `&name=${encodeURIComponent(query)}` +
       `&role=${encodeURIComponent(role || "")}` +
+      dayQueryParam() +
       staffQueryParam();
+    lastSearchQuery = query;
+    lastSearchRole = role || "student";
     const res = await fetch(url);
     const data = await res.json();
 
@@ -409,7 +507,7 @@ async function runQuery(query, { nameInput, div, btn, role }) {
     if (Array.isArray(data)) {
       div.innerHTML = "";
       if (!data.length) {
-        div.appendChild(renderEmpty("No lessons today", "Please try another name."));
+        div.appendChild(renderEmpty(`No lessons ${dayWord()}`, "Please try another name."));
         scheduleResultsReset(div);
         showRefreshButton();
         return;
@@ -454,7 +552,7 @@ async function runQuery(query, { nameInput, div, btn, role }) {
 
     if (!results || results.length === 0) {
       div.innerHTML = "";
-      div.appendChild(renderEmpty("No lessons today", "Please try another name."));
+      div.appendChild(renderEmpty(`No lessons ${dayWord()}`, "Please try another name, or switch day."));
       scheduleResultsReset(div);
       showRefreshButton();
       return;
@@ -533,7 +631,7 @@ function showChoicesModal(choices, onPick, onCancel, { titleText, subText, modal
 
   const sub = document.createElement("p");
   sub.className = "modalSub";
-  sub.textContent = subText || "Select the correct name to show today's lessons.";
+  sub.textContent = subText || `Select the correct name to show ${dayWord()}'s lessons.`;
 
   header.appendChild(h);
   header.appendChild(sub);
@@ -596,13 +694,13 @@ async function loadBoard({ silent } = {}) {
   if (!silent) {
     board.innerHTML = "";
     board.appendChild(renderLoading("Loading floor board…"));
-    if (dateLabel) dateLabel.textContent = "Loading today’s schedule…";
+    if (dateLabel) dateLabel.textContent = `Loading ${dayWord()}’s schedule…`;
   }
 
   if (refreshBtn) refreshBtn.disabled = true;
 
   try {
-    const res = await fetch(`${API_URL}?mode=board${staffQueryParam()}`);
+    const res = await fetch(`${API_URL}?mode=board${dayQueryParam()}${staffQueryParam()}`);
     const data = await res.json();
 
     if (data?.error || !data || !data.floors) {
@@ -610,8 +708,13 @@ async function loadBoard({ silent } = {}) {
     }
 
     boardData = data;
-    if (dateLabel) {
-      dateLabel.textContent = formatBoardDate(data.date);
+    if (data.day === "today" || data.day === "tomorrow") {
+      selectedDay = data.day;
+    }
+    updateDayNavUI();
+    if (data.date) {
+      const boardDate = document.getElementById("boardDateLabel");
+      if (boardDate) boardDate.textContent = formatBoardDate(data.date);
     }
 
     const preferred = BOARD_FLOORS.find(f => (data.floors[f] || []).length > 0);
@@ -654,8 +757,8 @@ function renderBoard() {
   if (!lessons.length) {
     board.appendChild(
       renderEmpty(
-        `No on-site lessons on ${activeFloor}/F today.`,
-        "Try another floor, or use Find my lesson."
+        `No on-site lessons on ${activeFloor}/F ${dayWord()}.`,
+        "Try another floor or day, or use Find my lesson."
       )
     );
     return;
@@ -668,7 +771,7 @@ function renderBoard() {
   colHead.className = "scheduleHead";
   colHead.innerHTML = `
     <span>Time</span>
-    <span>Student</span>
+    <span>Lesson</span>
     <span>Room</span>
   `;
   schedule.appendChild(colHead);
@@ -690,7 +793,10 @@ function createScheduleRow(lesson) {
 
   const name = document.createElement("div");
   name.className = "scheduleName";
-  name.textContent = cleanBoardStudentName(lesson.student) || "Group class";
+  name.textContent =
+    String(lesson.title || "").trim() ||
+    cleanBoardStudentName(lesson.student) ||
+    "Lesson";
 
   const room = document.createElement("div");
   room.className = "scheduleRoom";
@@ -716,4 +822,5 @@ function cleanBoardStudentName(raw) {
 }
 
 initModeSwitch();
+initDayNav();
 applyAccessMode();

@@ -3,8 +3,8 @@
  *
  * Deploy as Web App (Execute as: Me, Who has access: Anyone).
  * Endpoints:
- *   ?mode=board&key=STAFF_KEY              → floor board (staff only)
- *   ?mode=search&name=...&role=...&key=... → name search
+ *   ?mode=board&day=today|tomorrow&key=STAFF_KEY
+ *   ?mode=search&name=...&role=...&day=today|tomorrow&key=...
  *
  * Public (no key): student role only, full name required (2+ words), no lesson titles.
  * Staff (valid key): tutor search + floor board unlocked.
@@ -83,7 +83,7 @@ function doGet(e) {
     if (!staff) {
       return json({ error: "Staff access required", floors: null });
     }
-    return json(buildBoard());
+    return json(buildBoard(params));
   }
 
   return json(runSearch(params, staff));
@@ -96,8 +96,9 @@ function isStaffRequest(params) {
 
 // ===== Board =====
 
-function buildBoard() {
-  var range = todayRange();
+function buildBoard(params) {
+  var day = normalizeDay(params && params.day);
+  var range = dayRange(day);
   var floors = { "13": [], "10": [], "8": [] };
   var events = getEventsForCalendars([WAN_CHAI_CALENDAR_ID], range.start, range.end);
 
@@ -118,6 +119,7 @@ function buildBoard() {
     if (!floors.hasOwnProperty(floor)) return;
 
     floors[floor].push({
+      title: title,
       student: extractStudentDisplayName(title),
       start: ev.getStartTime(),
       end: ev.getEndTime(),
@@ -133,6 +135,7 @@ function buildBoard() {
   });
 
   return {
+    day: day,
     date: Utilities.formatDate(range.start, Session.getScriptTimeZone(), "yyyy-MM-dd"),
     floors: floors
   };
@@ -143,6 +146,7 @@ function buildBoard() {
 function runSearch(params, staff) {
   var name = String(params.name || "").toLowerCase().trim();
   var role = String(params.role || "").toLowerCase().trim();
+  var day = normalizeDay(params.day);
 
   if (!name) {
     return { error: "Missing name", results: [], choices: [] };
@@ -173,7 +177,7 @@ function runSearch(params, staff) {
   var keyword = queryKeywords.length === 1 ? queryKeywords[0] : "";
   var shouldAskChoice = !!(keyword && (role === "student" || role === "tutor"));
 
-  var range = todayRange();
+  var range = dayRange(day);
   var results = [];
   var choiceSet = {};
 
@@ -240,18 +244,28 @@ function runSearch(params, staff) {
     return new Date(a.start) - new Date(b.start);
   });
 
-  return { results: results, choices: [], staff: !!staff };
+  return { results: results, choices: [], staff: !!staff, day: day };
 }
 
 // ===== Calendar helpers =====
 
-function todayRange() {
-  var today = new Date();
-  var start = new Date(today);
+function normalizeDay(day) {
+  var d = String(day || "today").toLowerCase().trim();
+  if (d === "tomorrow" || d === "tmr" || d === "1") return "tomorrow";
+  return "today";
+}
+
+function dayRange(day) {
+  var offset = normalizeDay(day) === "tomorrow" ? 1 : 0;
+  var base = new Date();
+  base.setHours(0, 0, 0, 0);
+  base.setDate(base.getDate() + offset);
+
+  var start = new Date(base);
   start.setHours(0, 0, 0, 0);
-  var end = new Date(today);
+  var end = new Date(base);
   end.setHours(23, 59, 59, 999);
-  return { start: start, end: end };
+  return { start: start, end: end, day: normalizeDay(day) };
 }
 
 function getEventsForCalendars(calendarIds, start, end) {

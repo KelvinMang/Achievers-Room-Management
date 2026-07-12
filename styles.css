@@ -136,6 +136,71 @@ button.floorTab.is-active{
   letter-spacing:.02em;
 }
 
+.dayNav{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0 0 18px;
+  padding:10px 12px;
+  border:1px solid rgba(12, 26, 54, .10);
+  border-radius:16px;
+  background: rgba(255,255,255,.9);
+}
+
+.dayNavCompact{
+  margin:10px 0 0;
+  max-width:320px;
+  padding:8px 10px;
+}
+
+.dayNavCenter{
+  flex:1;
+  text-align:center;
+  min-width:0;
+}
+
+.dayNavLabel{
+  margin:0;
+  font-size:18px;
+  font-weight:900;
+  letter-spacing:-0.02em;
+}
+
+.dayNavDate{
+  margin:2px 0 0;
+  color:var(--muted);
+  font-size:13px;
+  font-weight:700;
+}
+
+button.dayArrow{
+  flex:0 0 auto;
+  min-width:44px;
+  width:44px;
+  height:44px;
+  padding:0;
+  border-radius:12px;
+  border:1px solid rgba(12, 26, 54, .14);
+  background:#fff !important;
+  color: var(--header-navy);
+  font-size:28px;
+  font-weight:700;
+  line-height:1;
+  box-shadow:none !important;
+  background-image:none !important;
+}
+
+button.dayArrow:hover:not(:disabled){
+  filter:none;
+  border-color: rgba(0, 36, 125, .35);
+}
+
+button.dayArrow:disabled{
+  opacity:.35;
+  cursor:not-allowed;
+}
+
 .modeBtn{
   min-width:0;
   height:48px;
@@ -257,10 +322,10 @@ button.floorTab.is-active{
 }
 
 .scheduleName{
-  font-size:clamp(17px, 2.2vw, 20px);
+  font-size:clamp(15px, 1.8vw, 18px);
   font-weight:800;
   letter-spacing:-0.02em;
-  line-height:1.3;
+  line-height:1.35;
   min-width:0;
   overflow-wrap:anywhere;
   word-break:break-word;
@@ -816,6 +881,10 @@ button.btnRefresh:active{
   .searchBtnWrap button{
     width:100%;
     min-width: 0;
+  }
+
+  .dayNavCompact{
+    max-width:none;
   }
 
   .boardHeader{
