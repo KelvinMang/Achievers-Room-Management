@@ -2,7 +2,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbyOkNPd7RTUgtISDDqy8B8V
 
 /** Must match keys in Code.gs. Change both sides when rotating. */
 const STAFF_KEY = "achievers-wc-staff-2026";
-const TUTOR_KEY = "achievers-tutor-2026";
+const TUTOR_KEY = "achievers-tutor";
 const STAFF_SESSION_KEY = "achievers_staff_key";
 const TUTOR_SESSION_KEY = "achievers_tutor_key";
 
@@ -119,8 +119,7 @@ function initDayNav() {
 function resolveAccessMode() {
   const params = new URLSearchParams(window.location.search);
   const staffFromUrl = (params.get("staff") || "").trim();
-  // Tutor link is simply ?tutor (no secret in the URL).
-  const tutorFlag = params.has("tutor");
+  const tutorFromUrl = (params.get("tutor") || "").trim();
 
   if (staffFromUrl && staffFromUrl === STAFF_KEY) {
     sessionStorage.setItem(STAFF_SESSION_KEY, STAFF_KEY);
@@ -128,8 +127,8 @@ function resolveAccessMode() {
     return { staff: true, tutor: false };
   }
 
-  if (tutorFlag) {
-    sessionStorage.setItem(TUTOR_SESSION_KEY, "1");
+  if (tutorFromUrl && tutorFromUrl === TUTOR_KEY) {
+    sessionStorage.setItem(TUTOR_SESSION_KEY, TUTOR_KEY);
     sessionStorage.removeItem(STAFF_SESSION_KEY);
     return { staff: false, tutor: true };
   }
@@ -137,12 +136,15 @@ function resolveAccessMode() {
   if (staffFromUrl && staffFromUrl !== STAFF_KEY) {
     sessionStorage.removeItem(STAFF_SESSION_KEY);
   }
+  if (tutorFromUrl && tutorFromUrl !== TUTOR_KEY) {
+    sessionStorage.removeItem(TUTOR_SESSION_KEY);
+  }
 
   // Prefer staff session if both somehow exist.
   if (sessionStorage.getItem(STAFF_SESSION_KEY) === STAFF_KEY) {
     return { staff: true, tutor: false };
   }
-  if (sessionStorage.getItem(TUTOR_SESSION_KEY) === "1") {
+  if (sessionStorage.getItem(TUTOR_SESSION_KEY) === TUTOR_KEY) {
     return { staff: false, tutor: true };
   }
 

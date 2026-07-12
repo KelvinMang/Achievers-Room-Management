@@ -13,7 +13,7 @@
  * Keep STAFF_KEY / TUTOR_KEY in sync with app.js.
  */
 var STAFF_KEY = "achievers-wc-staff-2026";
-var TUTOR_KEY = "achievers-tutor-2026";
+var TUTOR_KEY = "achievers-tutor";
 var SCRIPT_TZ = "Asia/Hong_Kong";
 
 var WAN_CHAI_CALENDAR_ID = "admin@achievershk.com";
