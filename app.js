@@ -15,12 +15,14 @@ const HELP_ADDRESS = "Room 1012, 10/F, Tai Yau Building, 181 Johnston Road, Wan 
 const STUDENT_HELP = {
   title: "Can't find your room?",
   body: `Please visit the Room Management Desktop at ${HELP_ADDRESS} to check today’s floor board.`,
+  note: "Rooms can change occasionally — please double-check your room before class.",
   contact: `Still stuck? Call ${HELP_PHONE}.`
 };
 
 const TUTOR_HELP = {
   title: "Can't find your lesson room?",
   body: `Please visit the Room Management Desktop at ${HELP_ADDRESS} to check today’s floor board.`,
+  note: "Rooms can change occasionally — please double-check your room before class.",
   contact: `Need help? Call ${HELP_PHONE}.`
 };
 
@@ -226,6 +228,16 @@ function fillHelpCard(el, content) {
   body.className = "helpNoteBody";
   body.textContent = content.body;
 
+  el.appendChild(title);
+  el.appendChild(body);
+
+  if (content.note) {
+    const note = document.createElement("p");
+    note.className = "helpNoteBody helpNoteReminder";
+    note.textContent = content.note;
+    el.appendChild(note);
+  }
+
   const contact = document.createElement("p");
   contact.className = "helpNoteContact";
   const match = String(content.contact || "").match(/^(.*?)(\+852[\d\s]+)(.*)$/);
@@ -240,8 +252,6 @@ function fillHelpCard(el, content) {
     contact.textContent = content.contact || "";
   }
 
-  el.appendChild(title);
-  el.appendChild(body);
   el.appendChild(contact);
 }
 

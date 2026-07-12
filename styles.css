@@ -163,6 +163,10 @@ button.floorTab.is-active{
   line-height:1.55;
 }
 
+.helpNoteReminder{
+  margin-top:8px;
+}
+
 .helpNoteContact{
   margin-top:10px;
 }
