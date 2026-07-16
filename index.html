@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Room Finder</title>
   <link rel="icon" type="image/png" href="./favicon.png" />
-  <link rel="stylesheet" href="./styles.css?v=21" />
+  <link rel="stylesheet" href="./styles.css?v=38" />
   <meta name="theme-color" content="#00247d" />
 </head>
 <body>
@@ -28,7 +28,7 @@
         Floor board
       </button>
       <button type="button" class="modeBtn" id="modeAvailBtn" role="tab" aria-selected="false" data-mode="availability">
-        13/F Availability
+        Room availability
       </button>
     </nav>
 
@@ -95,12 +95,12 @@
         </div>
       </section>
 
-      <section class="panel" id="availPanel" aria-label="13/F room availability" hidden>
+      <section class="panel" id="availPanel" aria-label="Room availability" hidden>
         <div class="panelInner">
           <div class="boardHeader">
             <div>
-              <p class="boardTitle" id="availTitle">13/F room availability</p>
-              <p class="boardSub" id="availSub">Password required · Helios calendar</p>
+              <p class="boardTitle" id="availTitle">Room availability</p>
+              <p class="boardSub" id="availSub">Password required · room availability</p>
             </div>
             <div class="availHeaderActions">
               <button type="button" id="availLogoutBtn" class="btnRefresh" hidden>Lock</button>
@@ -109,7 +109,7 @@
           </div>
 
           <div id="availGate" class="availGate" hidden>
-            <p class="availGateHint">Enter the 13/F availability password to continue.</p>
+            <p class="availGateHint">Enter the availability password to continue.</p>
             <button type="button" id="availUnlockBtn" class="availUnlockBtn">Enter password</button>
           </div>
 
@@ -119,16 +119,24 @@
                 <p class="availSectionTitle">Free now</p>
                 <p class="availSectionMeta" id="availNowMeta">Loading…</p>
               </div>
-              <div id="availNowCards" class="availNowCards" role="list"></div>
+              <div id="availNowCards" class="availNowByFloor"></div>
+            </section>
+
+            <section class="availOverviewSection" aria-label="Day overview">
+              <div class="availSectionHead">
+                <p class="availSectionTitle">Day overview</p>
+                <p class="availSectionMeta" id="availOverviewMeta">Green = free · navy = occupied · red = conflict</p>
+              </div>
+              <div id="availGridWrap" class="availGridWrap" aria-label="Day schedule grid"></div>
             </section>
 
             <section class="availCheckSection" aria-label="Check a timeslot">
               <div class="availSectionHead">
                 <p class="availSectionTitle">Check a timeslot</p>
-                <p class="availSectionMeta">Which rooms are free for your window</p>
+                <p class="availSectionMeta">Find free rooms for a specific window</p>
               </div>
 
-              <form class="availControls" id="availForm" autocomplete="off" onsubmit="event.preventDefault(); loadAvailability();">
+              <form class="availControls" id="availForm" autocomplete="off" onsubmit="event.preventDefault(); checkAvailability();">
                 <div class="field">
                   <label for="availDate">Date</label>
                   <input id="availDate" type="date" name="avail-date" required />
@@ -147,8 +155,6 @@
               </form>
 
               <div id="availSummary" class="availSummary" role="status" aria-live="polite"></div>
-              <p class="boardHint">Overview · green = free · navy = busy</p>
-              <div id="availGridWrap" class="availGridWrap" aria-label="Day schedule grid"></div>
             </section>
           </div>
         </div>
@@ -156,6 +162,6 @@
     </main>
   </div>
 
-  <script src="./app.js?v=21"></script>
+  <script src="./app.js?v=38"></script>
 </body>
 </html>

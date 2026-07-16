@@ -1,5 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbya1NUgktlSXAT2KonO9uUSMd5qu3S2_1AcngEadxrd6b3yaEr2HpeS46G4n6VmfsoLWg/exec";
-
+const API_URL = "https://script.google.com/macros/s/AKfycbw08QoTamHSdUpy8qoBFUqCv0F5gz9LspimwAqqzDi3dQ43FeHJtDfj6kOw6oasYgCowQ/exec";
 /** Must match keys in Code.gs. Change both sides when rotating. */
 const STAFF_KEY = "achievers-wc-staff-2026";
 const TUTOR_KEY = "achievers-tutor";
@@ -13,7 +12,7 @@ const AVAIL_REFRESH_MS = 60 * 1000;
 const BOARD_FLOORS = ["13", "10", "8"];
 const AVAIL_GRID_START_MIN = 9 * 60;
 const AVAIL_GRID_END_MIN = 21 * 60;
-const AVAIL_PX_PER_MIN = 1.1;
+const AVAIL_PX_PER_MIN = 1.45;
 
 const HELP_PHONE = "+852 5727 1209";
 const HELP_ADDRESS = "Room 1012, 10/F, Tai Yau Building, 181 Johnston Road, Wan Chai";
@@ -204,7 +203,7 @@ function applyAccessMode() {
   updatePortalHelp();
 
   if (staffMode) {
-    if (subtitle) subtitle.textContent = "Staff mode — search, floor board, or 13/F availability.";
+    if (subtitle) subtitle.textContent = "Staff mode — search, floor board, or room availability.";
     if (nameLabel) nameLabel.textContent = "Student / Tutor name";
     if (nameInput) nameInput.placeholder = "Enter student or tutor name (e.g. Peter Chan)";
   } else if (tutorMode) {
@@ -1011,7 +1010,49 @@ function cleanBoardStudentName(raw) {
   return val;
 }
 
-// ===== 13/F Availability =====
+// ===== Room availability =====
+
+const AVAIL_HIDDEN_ROOMS = new Set(["1012A"]);
+const AVAIL_FLOOR_ORDER = [
+  { id: "13", label: "13/F" },
+  { id: "10", label: "10/F" },
+  { id: "8", label: "8/F" }
+];
+
+function availRoomFloorId(roomId) {
+  const id = String(roomId || "");
+  if (id === "CEO" || /^1309/i.test(id)) return "13";
+  if (/^1012/i.test(id)) return "10";
+  if (/^804/i.test(id)) return "8";
+  return null;
+}
+
+function visibleAvailRooms(rooms) {
+  return (rooms || []).filter(room => room && !AVAIL_HIDDEN_ROOMS.has(room.id));
+}
+
+function groupAvailRoomsByFloor(rooms) {
+  const groups = AVAIL_FLOOR_ORDER.map(floor => ({
+    id: floor.id,
+    label: floor.label,
+    rooms: []
+  }));
+  const byId = Object.fromEntries(groups.map(g => [g.id, g]));
+
+  visibleAvailRooms(rooms).forEach(room => {
+    const floorId = availRoomFloorId(room.id);
+    if (floorId && byId[floorId]) byId[floorId].rooms.push(room);
+  });
+
+  return groups.filter(g => g.rooms.length > 0);
+}
+
+function createAvailFloorHeading(label) {
+  const heading = document.createElement("p");
+  heading.className = "availFloorHeading";
+  heading.textContent = label;
+  return heading;
+}
 
 const AVAIL_TIME_OPTIONS = (() => {
   const out = [];
@@ -1109,8 +1150,8 @@ function updateAvailAuthUI(unlocked) {
   if (refreshBtn) refreshBtn.hidden = !unlocked;
   if (sub) {
     sub.textContent = unlocked
-      ? "Helios calendar — CEO Room & 1309A–E, G"
-      : "Password required · Helios calendar";
+      ? "13/F · 10/F · 8/F · Helios + Wan Chai calendars"
+      : "Password required · room availability";
   }
 }
 
@@ -1140,7 +1181,7 @@ function promptAvailPassword() {
 
   modal.innerHTML = `
     <div class="modalHeader">
-      <p class="modalTitle" id="availLoginTitle">13/F Availability</p>
+      <p class="modalTitle" id="availLoginTitle">Room availability</p>
       <p class="modalSub">Enter password to view live room status</p>
     </div>
     <form class="modalBody availLoginForm" id="availLoginForm" autocomplete="off">
@@ -1233,6 +1274,10 @@ function scheduleAvailRefresh() {
   }, AVAIL_REFRESH_MS);
 }
 
+function checkAvailability() {
+  return loadAvailability({ mode: "check" });
+}
+
 async function loadAvailability(opts = {}) {
   if (!staffMode) return;
   if (!getAvailToken()) {
@@ -1241,6 +1286,10 @@ async function loadAvailability(opts = {}) {
     return;
   }
 
+  const mode = opts.mode || (opts.silent ? "silent" : "full");
+  const updateNow = mode === "full" || mode === "silent";
+  const updateCheck = true;
+
   const nowCards = document.getElementById("availNowCards");
   const summary = document.getElementById("availSummary");
   const gridWrap = document.getElementById("availGridWrap");
@@ -1248,15 +1297,25 @@ async function loadAvailability(opts = {}) {
   const refreshBtn = document.getElementById("availRefreshBtn");
   if (!summary || !gridWrap || !nowCards) return;
 
+  if (opts.date) {
+    const dateInput = document.getElementById("availDate");
+    if (dateInput) dateInput.value = opts.date;
+  }
+
   const q = getAvailQuery();
+  if (opts.date) q.date = opts.date;
+
   if (checkBtn) checkBtn.disabled = true;
   if (refreshBtn) refreshBtn.disabled = true;
 
-  if (!opts.silent) {
+  if (mode === "full") {
     nowCards.innerHTML = "";
     summary.innerHTML = "";
     gridWrap.innerHTML = "";
     nowCards.appendChild(renderLoading("Loading live room status…"));
+  } else if (mode === "check") {
+    summary.innerHTML = "";
+    summary.appendChild(renderLoading("Checking rooms…"));
   }
 
   try {
@@ -1286,197 +1345,374 @@ async function loadAvailability(opts = {}) {
     }
 
     availData = data;
-    renderAvailability(data);
-    scheduleAvailRefresh();
+    renderAvailability(data, { updateNow, updateCheck });
+    if (updateNow) scheduleAvailRefresh();
+    return data;
   } catch (err) {
-    nowCards.innerHTML = "";
+    if (updateNow) {
+      nowCards.innerHTML = "";
+      gridWrap.innerHTML = "";
+    }
     summary.innerHTML = "";
-    gridWrap.innerHTML = "";
     summary.appendChild(
       renderEmpty(
-        "Could not load availability",
-        "Set AVAILABILITY_PASSWORD in Script Properties, share Helios calendar, redeploy, then unlock again."
+        mode === "check" ? "Could not check rooms" : "Could not load availability",
+        "Set AVAILABILITY_PASSWORD, share Helios + WC calendars with the script account, redeploy, then unlock again."
       )
     );
+    return null;
   } finally {
     if (checkBtn) checkBtn.disabled = false;
     if (refreshBtn) refreshBtn.disabled = false;
   }
 }
 
-function renderAvailability(data) {
+function renderAvailability(data, opts = {}) {
+  const updateNow = opts.updateNow !== false;
+  const updateCheck = opts.updateCheck !== false;
+
   const nowCards = document.getElementById("availNowCards");
   const nowMeta = document.getElementById("availNowMeta");
+  const overviewMeta = document.getElementById("availOverviewMeta");
   const summary = document.getElementById("availSummary");
   const gridWrap = document.getElementById("availGridWrap");
   if (!nowCards || !summary || !gridWrap) return;
 
-  nowCards.innerHTML = "";
-  summary.innerHTML = "";
-  gridWrap.innerHTML = "";
+  const rooms = visibleAvailRooms(data.rooms);
+  const floorGroups = groupAvailRoomsByFloor(rooms);
 
-  if (nowMeta) {
-    nowMeta.textContent = `As of ${data.now} · tap a room for today’s calendar`;
+  if (updateNow) {
+    nowCards.innerHTML = "";
+    nowCards.className = "availNowByFloor";
+    if (nowMeta) {
+      nowMeta.textContent = `As of ${data.now} · tap a room for today’s calendar`;
+    }
+    floorGroups.forEach(group => {
+      const block = document.createElement("div");
+      block.className = "availFloorGroup";
+      block.appendChild(createAvailFloorHeading(group.label));
+      const list = document.createElement("div");
+      list.className = "availNowList";
+      list.setAttribute("role", "list");
+      group.rooms.forEach(room => {
+        list.appendChild(createAvailNowCard(room, data));
+      });
+      block.appendChild(list);
+      nowCards.appendChild(block);
+    });
   }
 
-  (data.rooms || []).forEach(room => {
-    nowCards.appendChild(createAvailNowCard(room, data));
-  });
-
-  const windowLabel = document.createElement("p");
-  windowLabel.className = "availWindowLabel";
-  windowLabel.textContent = `${data.date} · ${data.start}–${data.end}`;
-  summary.appendChild(windowLabel);
-
-  const list = document.createElement("div");
-  list.className = "availRoomList";
-
-  (data.rooms || []).forEach(room => {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = `availRoomRow is-${room.status || "available"}`;
-    row.setAttribute("aria-label", `${room.label || room.id} ${room.status}`);
-
-    const top = document.createElement("div");
-    top.className = "availRoomTop";
-
-    const name = document.createElement("span");
-    name.className = "availRoomName";
-    name.textContent = room.label || room.id;
-
-    const badge = document.createElement("span");
-    badge.className = "availStatusBadge";
-    badge.textContent = room.status === "busy" ? "Busy" : "Free";
-
-    top.appendChild(name);
-    top.appendChild(badge);
-    row.appendChild(top);
-
-    const detail = document.createElement("p");
-    detail.className = "availRoomDetail";
-    if (room.status === "busy" && Array.isArray(room.events) && room.events.length) {
-      const first = room.events[0];
-      const time = `${first.start || ""}–${first.end || ""}`.replace(/^–|–$/g, "");
-      detail.textContent =
-        room.events.length === 1
-          ? `${time || "Busy"} · ${first.title || "View schedule"}`
-          : `${room.events.length} bookings in this window · View schedule`;
-    } else {
-      detail.textContent = "Free for the selected time · View schedule";
+  if (updateCheck) {
+    if (overviewMeta) {
+      overviewMeta.textContent = `${data.date} · green = free · navy = occupied · red = conflict`;
     }
-    row.appendChild(detail);
+    gridWrap.innerHTML = "";
+    renderAvailOverviewGrid({ ...data, rooms }, gridWrap);
 
-    row.addEventListener("click", () => openRoomDayCalendar(room.id, data));
-    list.appendChild(row);
-  });
+    summary.innerHTML = "";
+    const windowLabel = document.createElement("p");
+    windowLabel.className = "availWindowLabel";
+    windowLabel.textContent = `Results for ${data.date} · ${data.start}–${data.end}`;
+    summary.appendChild(windowLabel);
 
-  summary.appendChild(list);
-  renderAvailOverviewGrid(data, gridWrap);
+    const freeCount = rooms.filter(r => r.status !== "busy").length;
+    const busyCount = rooms.length - freeCount;
+    const conflictCount = rooms.filter(r =>
+      roomHasConflicts(r, { useToday: false })
+    ).length;
+    const tally = document.createElement("p");
+    tally.className = "availResultTally";
+    tally.textContent =
+      conflictCount > 0
+        ? `${freeCount} free · ${busyCount} busy · ${conflictCount} conflict`
+        : `${freeCount} free · ${busyCount} busy`;
+    summary.appendChild(tally);
+
+    if (conflictCount > 0) {
+      const banner = document.createElement("p");
+      banner.className = "availConflictBanner";
+      banner.textContent = "Double booking detected — conflict rooms are marked in red.";
+      summary.appendChild(banner);
+    }
+
+    floorGroups.forEach(group => {
+      const block = document.createElement("div");
+      block.className = "availFloorGroup";
+      block.appendChild(createAvailFloorHeading(group.label));
+
+      const list = document.createElement("div");
+      list.className = "availRoomList";
+
+      group.rooms.forEach(room => {
+        const conflict = roomHasConflicts(room, { useToday: false });
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = `availRoomRow is-${conflict ? "conflict" : room.status || "available"}`;
+        row.setAttribute(
+          "aria-label",
+          `${room.label || room.id} ${conflict ? "conflict" : room.status}`
+        );
+
+        const top = document.createElement("div");
+        top.className = "availRoomTop";
+
+        const name = document.createElement("span");
+        name.className = "availRoomName";
+        name.textContent = room.label || room.id;
+
+        const badge = document.createElement("span");
+        badge.className = "availStatusBadge";
+        badge.textContent = conflict ? "Conflict" : room.status === "busy" ? "Busy" : "Free";
+
+        top.appendChild(name);
+        top.appendChild(badge);
+        row.appendChild(top);
+
+        const detail = document.createElement("p");
+        detail.className = "availRoomDetail";
+        if (conflict) {
+          detail.textContent = "Two or more bookings overlap · View schedule";
+        } else if (room.status === "busy" && Array.isArray(room.events) && room.events.length) {
+          const first = room.events[0];
+          const time = `${first.start || ""}–${first.end || ""}`.replace(/^–|–$/g, "");
+          detail.textContent =
+            room.events.length === 1
+              ? `${time || "Busy"} · ${first.title || "View schedule"}`
+              : `${room.events.length} bookings · View schedule`;
+        } else {
+          detail.textContent = "Free in this window · View schedule";
+        }
+        row.appendChild(detail);
+
+        row.addEventListener("click", () => openRoomDayCalendar(room.id, data));
+        list.appendChild(row);
+      });
+
+      block.appendChild(list);
+      summary.appendChild(block);
+    });
+  }
 }
 
 function createAvailNowCard(room, data) {
   const now = room.now;
   const status = now?.status || "available";
-  const card = document.createElement("button");
-  card.type = "button";
-  card.className = `availNowCard is-${status === "busy" ? "busy" : "available"}`;
-  card.setAttribute("role", "listitem");
+  const isBusy = status === "busy";
+  const conflict =
+    !!(now && now.hasConflict) || roomHasConflicts(room, { useToday: true });
 
-  const name = document.createElement("p");
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = `availNowRow is-${conflict ? "conflict" : isBusy ? "busy" : "available"}`;
+  row.setAttribute("role", "listitem");
+  row.setAttribute(
+    "aria-label",
+    `${room.label || room.id}: ${
+      conflict ? "Conflict — overlapping bookings" : now?.summary || (isBusy ? "Busy" : "Free")
+    }`
+  );
+
+  const left = document.createElement("div");
+  left.className = "availNowLeft";
+
+  const name = document.createElement("span");
   name.className = "availNowName";
   name.textContent = room.label || room.id;
 
-  const state = document.createElement("p");
-  state.className = "availNowState";
-  state.textContent = status === "busy" ? "BUSY" : "FREE";
-
-  const summary = document.createElement("p");
-  summary.className = "availNowSummary";
-  summary.textContent = now?.summary || "Free for the rest of today";
-
-  card.appendChild(name);
-  card.appendChild(state);
-  card.appendChild(summary);
-
-  if (status === "busy" && now?.eventTitle) {
-    const ev = document.createElement("p");
-    ev.className = "availNowEvent";
-    ev.textContent = now.eventTitle;
-    card.appendChild(ev);
+  const until = document.createElement("span");
+  until.className = "availNowUntil";
+  if (conflict) {
+    until.textContent = now?.hasConflict
+      ? "Double booked right now · tap to review"
+      : "Overlapping bookings today · tap to review";
+  } else if (isBusy && now?.eventTitle) {
+    until.textContent = `${now.summary || "Busy"} · ${now.eventTitle}`;
+  } else {
+    until.textContent = now?.summary || "Free for the rest of today";
   }
 
-  card.addEventListener("click", () => openRoomDayCalendar(room.id, data, { useToday: true }));
-  return card;
+  left.appendChild(name);
+  left.appendChild(until);
+
+  const badge = document.createElement("span");
+  badge.className = "availNowBadge";
+  badge.textContent = conflict ? "Conflict" : isBusy ? "Busy" : "Free";
+
+  const chevron = document.createElement("span");
+  chevron.className = "availNowChevron";
+  chevron.setAttribute("aria-hidden", "true");
+  chevron.textContent = "›";
+
+  row.appendChild(left);
+  row.appendChild(badge);
+  row.appendChild(chevron);
+
+  row.addEventListener("click", () => openRoomDayCalendar(room.id, data, { useToday: true }));
+  return row;
+}
+
+function formatAvailHourLabel(slot) {
+  const hour = parseInt(slot, 10);
+  if (Number.isNaN(hour)) return slot;
+  if (hour === 0) return "12am";
+  if (hour < 12) return `${hour}am`;
+  if (hour === 12) return "12pm";
+  return `${hour - 12}pm`;
+}
+
+function eventsOverlapRange(aStart, aEnd, bStart, bEnd) {
+  return aStart < bEnd && aEnd > bStart;
+}
+
+function roomHasConflicts(room, opts = {}) {
+  if (!room) return false;
+  if (opts.useToday) {
+    if (typeof room.todayHasConflict === "boolean") return room.todayHasConflict;
+    return countOverlappingEventPairs(room.todayEvents || room.dayEvents || []) > 0;
+  }
+  if (typeof room.hasConflict === "boolean") return room.hasConflict;
+  return countOverlappingEventPairs(room.dayEvents || []) > 0;
+}
+
+function countOverlappingEventPairs(events) {
+  const list = (events || [])
+    .map(ev => ({
+      start: hhmmToMinutes(ev.start),
+      end: hhmmToMinutes(ev.end)
+    }))
+    .filter(ev => ev.end > ev.start);
+
+  let count = 0;
+  for (let i = 0; i < list.length; i += 1) {
+    for (let j = i + 1; j < list.length; j += 1) {
+      if (eventsOverlapRange(list[i].start, list[i].end, list[j].start, list[j].end)) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+function buildSlotConflictMap(events, slots) {
+  const map = slots.map(() => false);
+  const list = (events || [])
+    .map(ev => ({
+      start: hhmmToMinutes(ev.start),
+      end: hhmmToMinutes(ev.end)
+    }))
+    .filter(ev => ev.end > ev.start);
+
+  slots.forEach((slot, idx) => {
+    const slotStart = hhmmToMinutes(slot);
+    const slotEnd = slotStart + 30;
+    let hits = 0;
+    list.forEach(ev => {
+      if (eventsOverlapRange(ev.start, ev.end, slotStart, slotEnd)) hits += 1;
+    });
+    map[idx] = hits > 1;
+  });
+  return map;
 }
 
 function renderAvailOverviewGrid(data, gridWrap) {
   const slots = data.slots || [];
   const grid = data.grid || {};
   const gridMeta = data.gridMeta || {};
-  const roomIds = (data.rooms || []).map(r => r.id);
-  if (!slots.length || !roomIds.length) return;
+  const gridConflict = data.gridConflict || {};
+  const floorGroups = groupAvailRoomsByFloor(data.rooms);
+  if (!slots.length || !floorGroups.length) return;
 
-  const scroller = document.createElement("div");
-  scroller.className = "availGridScroll";
+  const legend = document.createElement("div");
+  legend.className = "availGridLegend";
+  legend.innerHTML = `
+    <span class="availGridLegendItem"><i class="availGridSwatch is-free" aria-hidden="true"></i>Free</span>
+    <span class="availGridLegendItem"><i class="availGridSwatch is-busy" aria-hidden="true"></i>Occupied</span>
+    <span class="availGridLegendItem"><i class="availGridSwatch is-conflict" aria-hidden="true"></i>Conflict</span>
+    <span class="availGridLegendNote">Each block = 30 min</span>
+  `;
+  gridWrap.appendChild(legend);
 
-  const table = document.createElement("div");
-  table.className = "availGrid";
-  table.style.setProperty("--avail-cols", String(slots.length));
+  floorGroups.forEach(group => {
+    const block = document.createElement("div");
+    block.className = "availFloorGroup";
+    block.appendChild(createAvailFloorHeading(group.label));
 
-  const head = document.createElement("div");
-  head.className = "availGridHead";
-  const corner = document.createElement("div");
-  corner.className = "availGridCorner";
-  corner.textContent = "Room";
-  head.appendChild(corner);
-  slots.forEach(slot => {
-    const cell = document.createElement("div");
-    cell.className = "availGridTime";
-    cell.title = slot;
-    cell.textContent = slot.endsWith(":00") ? String(parseInt(slot, 10)) : "";
-    head.appendChild(cell);
-  });
-  table.appendChild(head);
+    const scroller = document.createElement("div");
+    scroller.className = "availGridScroll";
 
-  roomIds.forEach(id => {
-    const row = document.createElement("div");
-    row.className = "availGridRow";
+    const table = document.createElement("div");
+    table.className = "availGrid";
+    table.style.setProperty("--avail-cols", String(slots.length));
 
-    const label = document.createElement("button");
-    label.type = "button";
-    label.className = "availGridRoom";
-    const room = (data.rooms || []).find(r => r.id === id);
-    label.textContent = room?.label || id;
-    label.addEventListener("click", () => openRoomDayCalendar(id, data));
-    row.appendChild(label);
+    const head = document.createElement("div");
+    head.className = "availGridHead";
+    const corner = document.createElement("div");
+    corner.className = "availGridCorner";
+    corner.textContent = "Room";
+    head.appendChild(corner);
+    slots.forEach((slot, idx) => {
+      if (!slot.endsWith(":00")) return;
 
-    const busyFlags = grid[id] || [];
-    const metaRow = gridMeta[id] || [];
-    slots.forEach((_, idx) => {
-      const cell = document.createElement("button");
-      cell.type = "button";
-      cell.className = "availGridCell";
-      const busy = !!busyFlags[idx];
-      cell.classList.toggle("is-busy", busy);
-      cell.classList.toggle("is-free", !busy);
-      const meta = metaRow[idx];
-      const slotLabel = slots[idx];
-      if (busy && meta) {
-        cell.title = `${meta.start}–${meta.end} · ${meta.title}`;
-        cell.setAttribute("aria-label", `${id} busy at ${slotLabel}: ${meta.title}`);
-      } else {
-        cell.title = busy ? `${id} busy at ${slotLabel}` : `${id} free at ${slotLabel}`;
-        cell.setAttribute("aria-label", cell.title);
-      }
-      cell.addEventListener("click", () => openRoomDayCalendar(id, data));
-      row.appendChild(cell);
+      const cell = document.createElement("div");
+      cell.className = "availGridTime is-hour";
+      cell.title = slot;
+      cell.textContent = formatAvailHourLabel(slot);
+
+      const spansHalf = !!(slots[idx + 1] && slots[idx + 1].endsWith(":30"));
+      cell.style.gridColumn = `span ${spansHalf ? 2 : 1}`;
+      head.appendChild(cell);
+    });
+    table.appendChild(head);
+
+    group.rooms.forEach(room => {
+      const id = room.id;
+      const row = document.createElement("div");
+      row.className = "availGridRow";
+
+      const label = document.createElement("button");
+      label.type = "button";
+      label.className = "availGridRoom";
+      label.textContent = room.label || id;
+      label.addEventListener("click", () => openRoomDayCalendar(id, data));
+      row.appendChild(label);
+
+      const busyFlags = grid[id] || [];
+      const metaRow = gridMeta[id] || [];
+      const conflictFlags =
+        gridConflict[id] ||
+        buildSlotConflictMap(room.dayEvents || [], slots);
+      slots.forEach((_, idx) => {
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "availGridCell";
+        const busy = !!busyFlags[idx];
+        const conflict = !!conflictFlags[idx];
+        cell.classList.toggle("is-conflict", conflict);
+        cell.classList.toggle("is-busy", busy && !conflict);
+        cell.classList.toggle("is-free", !busy && !conflict);
+        const meta = metaRow[idx];
+        const slotLabel = slots[idx];
+        if (conflict) {
+          cell.title = `${id} conflict at ${slotLabel} — overlapping bookings`;
+          cell.setAttribute("aria-label", cell.title);
+        } else if (busy && meta) {
+          cell.title = `${meta.start}–${meta.end} · ${meta.title}`;
+          cell.setAttribute("aria-label", `${id} busy at ${slotLabel}: ${meta.title}`);
+        } else {
+          cell.title = busy ? `${id} busy at ${slotLabel}` : `${id} free at ${slotLabel}`;
+          cell.setAttribute("aria-label", cell.title);
+        }
+        cell.addEventListener("click", () => openRoomDayCalendar(id, data));
+        row.appendChild(cell);
+      });
+
+      table.appendChild(row);
     });
 
-    table.appendChild(row);
+    scroller.appendChild(table);
+    block.appendChild(scroller);
+    gridWrap.appendChild(block);
   });
-
-  scroller.appendChild(table);
-  gridWrap.appendChild(scroller);
 }
 
 function hhmmToMinutes(hhmm) {
@@ -1508,7 +1744,7 @@ function layoutRoomDayEvents(events) {
     group.endMin = Math.max(group.endMin, event.endMin);
   });
 
-  return groups.flatMap(({ events: groupEvents }) => {
+  const laidOut = groups.flatMap(({ events: groupEvents }) => {
     const active = [];
     let columnCount = 1;
 
@@ -1528,20 +1764,55 @@ function layoutRoomDayEvents(events) {
 
     return groupEvents.map(event => ({ ...event, columnCount }));
   });
+
+  return laidOut.map((event, idx, all) => {
+    const conflict = all.some(
+      (other, otherIdx) =>
+        otherIdx !== idx &&
+        eventsOverlapRange(event.startMin, event.endMin, other.startMin, other.endMin)
+    );
+    return { ...event, conflict };
+  });
+}
+
+function minutesToHhmm(totalMin) {
+  const t = Math.max(0, Math.round(totalMin));
+  const h = Math.floor(t / 60);
+  const m = t % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function snapAvailMinutes(min, mode = "nearest") {
+  const step = 30;
+  if (mode === "floor") return Math.floor(min / step) * step;
+  if (mode === "ceil") return Math.ceil(min / step) * step;
+  return Math.round(min / step) * step;
+}
+
+function defaultCreateCalendarsForRoom(roomId) {
+  const floor = availRoomFloorId(roomId);
+  if (floor === "13") return { helios: true, wc10: false };
+  return { helios: false, wc10: true };
 }
 
 function openRoomDayCalendar(roomId, data, opts = {}) {
   const room = (data.rooms || []).find(r => r.id === roomId);
   if (!room) return;
 
-  const useToday = !!opts.useToday;
-  const viewDate = useToday ? data.today || data.date : data.date;
-  const viewEvents = useToday
-    ? Array.isArray(room.todayEvents)
+  // Prefer explicit date; Free now passes useToday to show today's schedule.
+  const viewDate = String(
+    opts.date || (opts.useToday ? data.today || data.date : data.date) || ""
+  ).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(viewDate)) return;
+
+  const viewingToday = viewDate === data.today;
+  const viewEvents =
+    viewingToday && Array.isArray(room.todayEvents)
       ? room.todayEvents
-      : room.dayEvents || []
-    : room.dayEvents || [];
-  const showNowLine = useToday || !!data.isToday;
+      : viewDate === data.date
+        ? room.dayEvents || []
+        : room.dayEvents || [];
+  const showNowLine = viewingToday;
 
   document.querySelectorAll(".modalOverlay[data-room-cal]").forEach(el => el.remove());
 
@@ -1561,18 +1832,31 @@ function openRoomDayCalendar(roomId, data, opts = {}) {
   titleEl.textContent = room.label || room.id;
   const subEl = document.createElement("p");
   subEl.className = "modalSub";
-  subEl.textContent = `${viewDate} · ${data.gridStart || "09:00"}–${data.gridEnd || "21:00"}`;
+  subEl.textContent = `${viewDate} · ${data.gridStart || "09:00"}–${data.gridEnd || "21:00"} · drag empty time to book`;
   header.appendChild(titleEl);
   header.appendChild(subEl);
+
+  const conflictCount = countOverlappingEventPairs(viewEvents);
+  if (conflictCount > 0) {
+    const flag = document.createElement("p");
+    flag.className = "availDayConflictFlag";
+    flag.textContent = "Conflict: overlapping bookings in this room (shown in red)";
+    header.appendChild(flag);
+  }
 
   const body = document.createElement("div");
   body.className = "modalBody availDayBody";
   body.appendChild(
     buildRoomDayTimeline(
       { ...room, dayEvents: viewEvents },
-      { ...data, date: viewDate, isToday: showNowLine }
+      { ...data, date: viewDate, isToday: showNowLine },
+      { viewDate }
     )
   );
+  const scrollPad = document.createElement("div");
+  scrollPad.className = "availDayScrollPad";
+  scrollPad.setAttribute("aria-hidden", "true");
+  body.appendChild(scrollPad);
 
   const actions = document.createElement("div");
   actions.className = "modalActions";
@@ -1594,29 +1878,38 @@ function openRoomDayCalendar(roomId, data, opts = {}) {
   });
 }
 
-function buildRoomDayTimeline(room, data) {
+function buildRoomDayTimeline(room, data, viewOpts = {}) {
   const wrap = document.createElement("div");
   wrap.className = "availDayTimeline";
 
   const totalMins = AVAIL_GRID_END_MIN - AVAIL_GRID_START_MIN;
   const height = Math.round(totalMins * AVAIL_PX_PER_MIN);
   wrap.style.height = `${height}px`;
+  wrap.style.setProperty("--avail-hour-px", `${60 * AVAIL_PX_PER_MIN}px`);
+  wrap.style.setProperty("--avail-px-per-min", String(AVAIL_PX_PER_MIN));
 
   const hours = document.createElement("div");
   hours.className = "availDayHours";
-  for (let t = AVAIL_GRID_START_MIN; t < AVAIL_GRID_END_MIN; t += 60) {
+  for (let t = AVAIL_GRID_START_MIN; t <= AVAIL_GRID_END_MIN; t += 60) {
     const label = document.createElement("div");
-    label.className = "availDayHour";
+    label.className = "availDayHour" + (t === AVAIL_GRID_END_MIN ? " is-end" : "");
     label.style.top = `${(t - AVAIL_GRID_START_MIN) * AVAIL_PX_PER_MIN}px`;
     const h = Math.floor(t / 60);
     label.textContent = `${h}:00`;
     hours.appendChild(label);
 
-    const line = document.createElement("div");
-    line.className = "availDayHourLine";
-    line.style.top = `${(t - AVAIL_GRID_START_MIN) * AVAIL_PX_PER_MIN}px`;
-    wrap.appendChild(line);
+    if (t < AVAIL_GRID_END_MIN) {
+      const line = document.createElement("div");
+      line.className = "availDayHourLine";
+      line.style.top = `${(t - AVAIL_GRID_START_MIN) * AVAIL_PX_PER_MIN}px`;
+      wrap.appendChild(line);
+    }
   }
+  // End-of-day line
+  const endLine = document.createElement("div");
+  endLine.className = "availDayHourLine";
+  endLine.style.top = `${(AVAIL_GRID_END_MIN - AVAIL_GRID_START_MIN) * AVAIL_PX_PER_MIN}px`;
+  wrap.appendChild(endLine);
   wrap.appendChild(hours);
 
   const track = document.createElement("div");
@@ -1628,19 +1921,22 @@ function buildRoomDayTimeline(room, data) {
   if (!events.length) {
     const empty = document.createElement("p");
     empty.className = "availDayEmpty";
-    empty.textContent = "No bookings on this day";
+    empty.textContent = "No bookings · drag to add";
     track.appendChild(empty);
   } else {
     events.forEach(ev => {
       const block = document.createElement("button");
       block.type = "button";
       block.className = "availDayEvent";
-      const durationPx = (ev.endMin - ev.startMin) * AVAIL_PX_PER_MIN;
+      const durationMins = ev.endMin - ev.startMin;
+      const durationPx = durationMins * AVAIL_PX_PER_MIN;
+      const minHeight = durationMins <= 30 ? 40 : 28;
       block.style.top = `${(ev.startMin - AVAIL_GRID_START_MIN) * AVAIL_PX_PER_MIN}px`;
-      block.style.height = `${Math.max(22, durationPx)}px`;
+      block.style.height = `${Math.max(minHeight, durationPx)}px`;
       block.style.setProperty("--event-col", String(ev.column));
       block.style.setProperty("--event-cols", String(ev.columnCount));
-      block.classList.toggle("is-compact", durationPx < 48);
+      block.classList.toggle("is-compact", durationMins <= 30 || durationPx < 52);
+      block.classList.toggle("is-conflict", !!ev.conflict);
 
       const time = document.createElement("span");
       time.className = "availDayEventTime";
@@ -1652,7 +1948,24 @@ function buildRoomDayTimeline(room, data) {
 
       block.appendChild(time);
       block.appendChild(title);
-      block.title = `${ev.start}–${ev.end} · ${ev.title || "Busy"}`;
+      if (ev.source === "wc10") {
+        block.classList.add("is-from-wc10");
+        const src = document.createElement("span");
+        src.className = "availDaySourceTag";
+        src.textContent = "10/F cal";
+        block.appendChild(src);
+      }
+      if (ev.conflict) {
+        const tag = document.createElement("span");
+        tag.className = "availDayConflictTag";
+        tag.textContent = "Conflict";
+        block.appendChild(tag);
+      }
+      const sourceNote = ev.source === "wc10" ? " · from WC 10/F calendar" : "";
+      block.title = ev.conflict
+        ? `Conflict · ${ev.start}–${ev.end} · ${ev.title || "Busy"}${sourceNote}`
+        : `${ev.start}–${ev.end} · ${ev.title || "Busy"}${sourceNote}`;
+      block.addEventListener("pointerdown", e => e.stopPropagation());
       block.addEventListener("click", e => {
         e.stopPropagation();
         showAvailEventDetails(room, ev, data.date);
@@ -1674,7 +1987,388 @@ function buildRoomDayTimeline(room, data) {
     }
   }
 
+  enableAvailDayDragCreate(wrap, room, data, viewOpts);
   return wrap;
+}
+
+function enableAvailDayDragCreate(wrap, room, data, viewOpts = {}) {
+  if (!wrap) return;
+
+  const viewDate = String(viewOpts.viewDate || data.date || "").trim();
+  let pointerId = null;
+  let originMin = 0;
+  let ghost = null;
+
+  function clientYToMinutes(clientY) {
+    const rect = wrap.getBoundingClientRect();
+    const y = clientY - rect.top;
+    const raw = AVAIL_GRID_START_MIN + y / AVAIL_PX_PER_MIN;
+    return Math.min(AVAIL_GRID_END_MIN, Math.max(AVAIL_GRID_START_MIN, raw));
+  }
+
+  function selectionRange(a, b) {
+    let start = snapAvailMinutes(Math.min(a, b), "floor");
+    let end = snapAvailMinutes(Math.max(a, b), "ceil");
+    if (end <= start) end = start + 30;
+    start = Math.max(AVAIL_GRID_START_MIN, start);
+    end = Math.min(AVAIL_GRID_END_MIN, end);
+    if (end <= start) {
+      if (start + 30 <= AVAIL_GRID_END_MIN) end = start + 30;
+      else {
+        end = AVAIL_GRID_END_MIN;
+        start = end - 30;
+      }
+    }
+    return { start, end };
+  }
+
+  function paintGhost(start, end) {
+    if (!ghost) {
+      ghost = document.createElement("div");
+      ghost.className = "availDaySelectGhost";
+      ghost.setAttribute("aria-hidden", "true");
+      wrap.appendChild(ghost);
+    }
+    ghost.style.top = `${(start - AVAIL_GRID_START_MIN) * AVAIL_PX_PER_MIN}px`;
+    ghost.style.height = `${Math.max(18, (end - start) * AVAIL_PX_PER_MIN)}px`;
+    ghost.textContent = `${minutesToHhmm(start)}–${minutesToHhmm(end)}`;
+  }
+
+  function clearGhost() {
+    if (ghost) {
+      ghost.remove();
+      ghost = null;
+    }
+  }
+
+  function detachWindowListeners() {
+    window.removeEventListener("pointermove", onWindowMove);
+    window.removeEventListener("pointerup", onWindowUp);
+    window.removeEventListener("pointercancel", onWindowCancel);
+  }
+
+  function onWindowMove(e) {
+    if (pointerId == null || e.pointerId !== pointerId) return;
+    e.preventDefault();
+    const range = selectionRange(originMin, clientYToMinutes(e.clientY));
+    paintGhost(range.start, range.end);
+  }
+
+  function onWindowUp(e) {
+    if (pointerId == null || e.pointerId !== pointerId) return;
+    finish(e.clientY);
+  }
+
+  function onWindowCancel(e) {
+    if (pointerId == null || (e && e.pointerId !== pointerId)) return;
+    clearGhost();
+    wrap.classList.remove("is-dragging");
+    pointerId = null;
+    detachWindowListeners();
+  }
+
+  function finish(clientY) {
+    if (pointerId == null) return;
+    const range = selectionRange(originMin, clientYToMinutes(clientY));
+    clearGhost();
+    wrap.classList.remove("is-dragging");
+    pointerId = null;
+    detachWindowListeners();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(viewDate)) return;
+    openAvailCreateEventModal({
+      room,
+      date: viewDate,
+      start: minutesToHhmm(range.start),
+      end: minutesToHhmm(range.end)
+    });
+  }
+
+  wrap.addEventListener("pointerdown", e => {
+    if (e.button != null && e.button !== 0) return;
+    if (e.target.closest(".availDayEvent")) return;
+    e.preventDefault();
+    pointerId = e.pointerId;
+    originMin = clientYToMinutes(e.clientY);
+    const range = selectionRange(originMin, originMin);
+    paintGhost(range.start, range.end);
+    wrap.classList.add("is-dragging");
+    try {
+      wrap.setPointerCapture(pointerId);
+    } catch (_) {
+      /* ignore */
+    }
+    window.addEventListener("pointermove", onWindowMove, { passive: false });
+    window.addEventListener("pointerup", onWindowUp);
+    window.addEventListener("pointercancel", onWindowCancel);
+  });
+}
+
+function openAvailCreateEventModal(opts) {
+  const room = opts.room;
+  if (!room) return;
+
+  document.querySelectorAll(".modalOverlay[data-avail-create]").forEach(el => el.remove());
+
+  const defaults = defaultCreateCalendarsForRoom(room.id);
+  const overlay = document.createElement("div");
+  overlay.className = "modalOverlay";
+  overlay.setAttribute("data-avail-create", "1");
+  overlay.style.zIndex = "70";
+
+  const modal = document.createElement("div");
+  modal.className = "modal availCreateModal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "availCreateTitle");
+
+  const roomPrefix = room.id === "CEO" ? "CEO Room" : room.id;
+  const roomLocation =
+    room.id === "CEO" || /^1309/i.test(room.id)
+      ? `${room.label || room.id}, 13/F`
+      : /^1012/i.test(room.id)
+        ? `${room.label || room.id}, 10/F`
+        : /^804/i.test(room.id)
+          ? `${room.label || room.id}, 8/F`
+          : room.label || room.id;
+
+  modal.innerHTML = `
+    <div class="modalHeader availCreateHeader">
+      <p class="modalTitle" id="availCreateTitle">New booking</p>
+      <div class="availCreateMeta">
+        <span class="availCreateMetaRoom">${room.label || room.id}</span>
+        <span class="availCreateMetaSep" aria-hidden="true">·</span>
+        <span class="availCreateMetaDate">${opts.date}</span>
+      </div>
+    </div>
+    <form class="modalBody availCreateForm" id="availCreateForm" autocomplete="off">
+      <div class="availCreateTimeCard" role="group" aria-label="Time range">
+        <p class="availCreateCalsLabel">Time</p>
+        <div class="availCreateTimes">
+          <label class="availCreateTimePick" for="availCreateStart">
+            <span class="availCreateTimePickLabel">From</span>
+            <span class="availCreateTimePickShell">
+              <select id="availCreateStart" name="avail-create-start" required></select>
+            </span>
+          </label>
+          <span class="availCreateTimeArrow" aria-hidden="true">
+            <span class="availCreateTimeArrowLine"></span>
+          </span>
+          <label class="availCreateTimePick" for="availCreateEnd">
+            <span class="availCreateTimePickLabel">To</span>
+            <span class="availCreateTimePickShell">
+              <select id="availCreateEnd" name="avail-create-end" required></select>
+            </span>
+          </label>
+        </div>
+        <p class="availCreateDuration" id="availCreateDuration"></p>
+      </div>
+
+      <div class="field availCreateTitleField">
+        <label for="availCreateTitleInput">Event title</label>
+        <input id="availCreateTitleInput" type="text" name="avail-create-title" maxlength="180" required placeholder="e.g. Parent meeting" />
+        <p class="availCreateHint">Title <strong>${roomPrefix}: …</strong> · Location <strong>${roomLocation}</strong></p>
+      </div>
+
+      <div class="availCreateCals" role="group" aria-label="Add to calendar">
+        <p class="availCreateCalsLabel">Calendars</p>
+        <div class="availCreateCalGrid">
+          <label class="availCreateCalChip">
+            <input type="checkbox" id="availCreateHelios" name="cal-helios" ${
+              defaults.helios ? "checked" : ""
+            } />
+            <span class="availCreateCalChipFace">
+              <span class="availCreateCalChipName">Helios 13/F</span>
+            </span>
+          </label>
+          <label class="availCreateCalChip">
+            <input type="checkbox" id="availCreateWc10" name="cal-wc10" ${
+              defaults.wc10 ? "checked" : ""
+            } />
+            <span class="availCreateCalChipFace">
+              <span class="availCreateCalChipName">Wan Chai</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <p class="availCreateError" id="availCreateError" hidden></p>
+
+      <div class="modalActions availCreateActions">
+        <button type="button" class="btnSecondary" id="availCreateCancel">Cancel</button>
+        <button type="submit" id="availCreateSubmit">Create event</button>
+      </div>
+    </form>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  const startSelect = modal.querySelector("#availCreateStart");
+  const endSelect = modal.querySelector("#availCreateEnd");
+  const durationEl = modal.querySelector("#availCreateDuration");
+  const titleInput = modal.querySelector("#availCreateTitleInput");
+  const heliosCb = modal.querySelector("#availCreateHelios");
+  const wc10Cb = modal.querySelector("#availCreateWc10");
+  const errEl = modal.querySelector("#availCreateError");
+  const form = modal.querySelector("#availCreateForm");
+  const cancelBtn = modal.querySelector("#availCreateCancel");
+  const submitBtn = modal.querySelector("#availCreateSubmit");
+
+  const startOpts = AVAIL_TIME_OPTIONS.filter(t => t !== "21:00");
+  const endOpts = AVAIL_TIME_OPTIONS.filter(t => t !== "09:00");
+  startSelect.innerHTML = "";
+  startOpts.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    if (t === (opts.start || "09:00")) opt.selected = true;
+    startSelect.appendChild(opt);
+  });
+  endSelect.innerHTML = "";
+  endOpts.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    if (t === (opts.end || "09:30")) opt.selected = true;
+    endSelect.appendChild(opt);
+  });
+
+  function updateCreateDuration() {
+    if (!durationEl) return;
+    const mins = hhmmToMinutes(endSelect.value) - hhmmToMinutes(startSelect.value);
+    if (mins <= 0) {
+      durationEl.textContent = "End time must be after start";
+      durationEl.classList.add("is-invalid");
+      return;
+    }
+    durationEl.classList.remove("is-invalid");
+    if (mins < 60) {
+      durationEl.textContent = `${mins} minutes`;
+    } else if (mins % 60 === 0) {
+      durationEl.textContent = mins === 60 ? "1 hour" : `${mins / 60} hours`;
+    } else {
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      durationEl.textContent = `${h}h ${m}m`;
+    }
+  }
+
+  startSelect.addEventListener("change", () => {
+    if (hhmmToMinutes(endSelect.value) <= hhmmToMinutes(startSelect.value)) {
+      const next = hhmmToMinutes(startSelect.value) + 30;
+      const nextStr = minutesToHhmm(Math.min(next, AVAIL_GRID_END_MIN));
+      if ([...endSelect.options].some(o => o.value === nextStr)) {
+        endSelect.value = nextStr;
+      }
+    }
+    updateCreateDuration();
+  });
+  endSelect.addEventListener("change", updateCreateDuration);
+  updateCreateDuration();
+
+  const close = () => overlay.remove();
+  cancelBtn?.addEventListener("click", close);
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay) close();
+  });
+
+  form?.addEventListener("submit", async e => {
+    e.preventDefault();
+    if (!getAvailToken()) {
+      close();
+      promptAvailPassword();
+      return;
+    }
+
+    const start = startSelect.value;
+    const end = endSelect.value;
+    const title = (titleInput?.value || "").trim();
+    const calendars = [];
+    if (heliosCb?.checked) calendars.push("helios");
+    if (wc10Cb?.checked) calendars.push("wc10");
+
+    if (errEl) {
+      errEl.hidden = true;
+      errEl.textContent = "";
+    }
+
+    if (!title) {
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = "Enter an event title";
+      }
+      titleInput?.focus();
+      return;
+    }
+    if (hhmmToMinutes(end) <= hhmmToMinutes(start)) {
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = "End time must be after start time";
+      }
+      return;
+    }
+    if (!calendars.length) {
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = "Select at least one calendar";
+      }
+      return;
+    }
+    const eventDate = String(opts.date || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = "Missing booking date — close and open the room again";
+      }
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "createAvailabilityEvent",
+          key: STAFF_KEY,
+          token: getAvailToken(),
+          roomId: room.id,
+          date: eventDate,
+          start,
+          end,
+          title,
+          calendars
+        })
+      });
+      const data = await res.json();
+      if (data?.authRequired) {
+        clearAvailToken();
+        close();
+        updateAvailAuthUI(false);
+        promptAvailPassword();
+        return;
+      }
+      if (!data?.ok) {
+        throw new Error(data?.error || "Could not create event");
+      }
+      close();
+      // Reload the same calendar day we booked (not "today")
+      const fresh = await loadAvailability({ silent: true, date: eventDate });
+      const payload = fresh || availData;
+      if (payload) {
+        openRoomDayCalendar(room.id, payload, { date: eventDate });
+      }
+    } catch (err) {
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = err.message || "Could not create event";
+      }
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  setTimeout(() => titleInput?.focus(), 30);
 }
 
 function showAvailEventDetails(room, ev, dateStr) {

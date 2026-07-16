@@ -333,7 +333,27 @@ button.dayArrow:disabled{
   align-items:center;
 }
 
-/* ===== 13/F Availability ===== */
+/* ===== Room availability ===== */
+
+.availNowByFloor,
+.availFloorGroup{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.availNowByFloor{
+  gap:18px;
+}
+
+.availFloorHeading{
+  margin:0;
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--header-navy);
+}
 
 .availHeaderActions{
   display:flex;
@@ -394,104 +414,144 @@ button.dayArrow:disabled{
   font-weight:700;
 }
 
-.availNowSection{
+.availNowSection,
+.availOverviewSection,
+.availCheckSection{
   margin-bottom:28px;
+  padding-bottom:24px;
+  border-bottom:1px solid rgba(12, 26, 54, .08);
 }
 
-.availNowCards{
-  display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
-  gap:12px;
-  align-items:stretch;
+.availCheckSection{
+  margin-bottom:0;
+  padding-bottom:0;
+  border-bottom:0;
 }
 
-button.availNowCard{
+.availNowList{
   display:flex;
   flex-direction:column;
-  align-items:flex-start;
-  gap:6px;
-  text-align:left;
-  padding:16px;
-  border-radius:16px;
+  gap:0;
   border:1px solid rgba(12, 26, 54, .10);
-  background:rgba(255,255,255,.95);
-  cursor:pointer;
-  box-shadow:none !important;
-  background-image:none !important;
+  border-radius:16px;
+  overflow:hidden;
+  background:rgba(255,255,255,.96);
+}
+
+button.availNowRow{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto auto;
+  align-items:center;
+  gap:12px 14px;
+  width:100%;
   min-width:0;
   height:auto;
-  min-height:118px;
-  transition:border-color .18s ease, box-shadow .18s ease, transform .12s ease;
+  min-height:64px;
+  margin:0;
+  padding:14px 16px;
+  border:0;
+  border-bottom:1px solid rgba(12, 26, 54, .08);
+  border-radius:0;
+  background:#fff !important;
+  box-shadow:none !important;
+  background-image:none !important;
+  color:inherit;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+  transition:background .15s ease;
 }
 
-button.availNowCard:hover{
-  transform:translateY(-2px);
-  box-shadow:0 12px 24px rgba(12, 26, 54, .10) !important;
+button.availNowRow:last-child{
+  border-bottom:0;
 }
 
-button.availNowCard:focus-visible,
+button.availNowRow:hover{
+  background:rgba(0, 36, 125, .03) !important;
+}
+
+button.availNowRow:focus-visible,
 button.availRoomRow:focus-visible,
 button.availGridRoom:focus-visible,
 button.availGridCell:focus-visible,
 button.availDayEvent:focus-visible{
   outline:3px solid rgba(24, 59, 255, .32);
-  outline-offset:2px;
+  outline-offset:-3px;
 }
 
-button.availNowCard.is-available{
-  border-color:rgba(22, 163, 74, .28);
-  background:rgba(22, 163, 74, .07) !important;
-}
-
-button.availNowCard.is-busy{
-  border-color:rgba(0, 36, 125, .22);
-  background:rgba(0, 36, 125, .06) !important;
-}
-
-button.availNowCard.is-muted{
-  opacity:.92;
+.availNowLeft{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
 }
 
 .availNowName{
-  margin:0;
-  font-size:14px;
+  font-size:15px;
   font-weight:800;
-  color:var(--muted);
-}
-
-.availNowState{
-  margin:0;
-  font-size:28px;
-  font-weight:900;
-  letter-spacing:-0.03em;
-  line-height:1;
-}
-
-.availNowCard.is-available .availNowState{ color:#15803d; }
-.availNowCard.is-busy .availNowState{ color:var(--header-navy); }
-
-.availNowSummary{
-  margin:0;
-  font-size:13px;
-  font-weight:700;
+  letter-spacing:-0.01em;
   color:var(--ink);
-  line-height:1.35;
 }
 
-.availNowEvent{
-  margin:2px 0 0;
-  font-size:12px;
+.availNowUntil{
+  font-size:13px;
   font-weight:600;
   color:var(--muted);
   line-height:1.35;
-  display:-webkit-box;
-  -webkit-line-clamp:2;
-  -webkit-box-orient:vertical;
   overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 
-.availCheckSection{
-  margin-top:8px;
+.availNowBadge{
+  flex:0 0 auto;
+  min-width:56px;
+  text-align:center;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+}
+
+button.availNowRow.is-available .availNowBadge{
+  background:rgba(22, 163, 74, .12);
+  color:#15803d;
+}
+
+button.availNowRow.is-busy .availNowBadge{
+  background:rgba(0, 36, 125, .10);
+  color:var(--header-navy);
+}
+
+.availNowChevron{
+  color:rgba(12, 26, 54, .35);
+  font-size:22px;
+  font-weight:500;
+  line-height:1;
+}
+
+.availOverviewSection .availGridWrap{
+  margin-top:0;
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
+
+.availSummary .availFloorGroup{
+  margin-top:14px;
+}
+
+.availSummary .availFloorGroup:first-of-type{
+  margin-top:4px;
+}
+
+.availResultTally{
+  margin:0 0 12px;
+  font-size:14px;
+  font-weight:800;
+  color:var(--header-navy);
 }
 
 .availControls{
@@ -657,30 +717,81 @@ button.availRoomRow.is-busy .availRoomDetail{
   margin-top:8px;
 }
 
+.availGridLegend{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:12px 16px;
+  margin:0 0 10px;
+  font-size:13px;
+  font-weight:700;
+  color:var(--muted);
+}
+
+.availGridLegendItem{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  color:var(--ink);
+}
+
+.availGridLegendNote{
+  margin-left:auto;
+  font-size:12px;
+  font-weight:700;
+  color:var(--muted);
+}
+
+.availGridSwatch{
+  display:inline-block;
+  width:16px;
+  height:12px;
+  border-radius:4px;
+}
+
+.availGridSwatch.is-free{
+  background:rgba(22, 163, 74, .22);
+  border:1px solid rgba(22, 163, 74, .35);
+}
+
+.availGridSwatch.is-busy{
+  background:var(--header-navy);
+  border:1px solid #001a5c;
+}
+
+.availGridSwatch.is-conflict{
+  background:#dc2626;
+  border:1px solid #b91c1c;
+}
+
 .availGridScroll{
   overflow-x:auto;
   -webkit-overflow-scrolling:touch;
   border:1px solid rgba(12, 26, 54, .10);
   border-radius:16px;
-  background:rgba(255,255,255,.95);
+  background:rgba(255,255,255,.98);
 }
 
 .availGrid{
   --avail-cols: 24;
-  min-width:max(100%, calc(88px + var(--avail-cols) * 18px));
-  padding:10px 12px 14px;
+  --avail-occupied:var(--header-navy);
+  --avail-occupied-strong:#001a5c;
+  min-width:max(100%, calc(108px + var(--avail-cols) * 22px));
+  padding:12px 14px 16px;
 }
 
 .availGridHead,
 .availGridRow{
   display:grid;
-  grid-template-columns:88px repeat(var(--avail-cols), minmax(16px, 1fr));
-  gap:3px;
+  grid-template-columns:108px repeat(var(--avail-cols), minmax(20px, 1fr));
+  gap:4px;
   align-items:center;
 }
 
 .availGridHead{
-  margin-bottom:6px;
+  margin-bottom:8px;
+  padding-bottom:8px;
+  border-bottom:1px solid rgba(12, 26, 54, .08);
 }
 
 .availGridCorner,
@@ -699,7 +810,7 @@ button.availGridRoom{
   text-align:left;
   min-width:0;
   height:auto;
-  padding:0;
+  padding:0 4px 0 0;
   border:0;
   background:transparent !important;
   box-shadow:none !important;
@@ -707,38 +818,130 @@ button.availGridRoom{
 }
 
 .availGridTime{
-  text-align:center;
-  font-size:10px;
+  position:relative;
+  text-align:left;
+  font-size:12px;
   font-weight:800;
-  color:var(--muted);
-  line-height:1;
+  color:var(--ink);
+  line-height:1.15;
+  min-height:20px;
+  padding:0 0 2px 2px;
+  letter-spacing:-0.01em;
+}
+
+.availGridTime.is-hour::before{
+  content:"";
+  position:absolute;
+  left:0;
+  bottom:-8px;
+  width:1px;
+  height:7px;
+  background:rgba(12, 26, 54, .28);
 }
 
 .availGridRow{
-  margin-top:3px;
+  margin-top:4px;
 }
 
 .availGridCell{
-  height:22px;
+  height:26px;
   min-width:0;
   padding:0;
   border:0;
-  border-radius:4px;
+  border-radius:5px;
   cursor:pointer;
   box-shadow:none !important;
   background-image:none !important;
 }
 
 .availGridCell.is-free{
-  background:rgba(22, 163, 74, .12) !important;
+  background:rgba(22, 163, 74, .16) !important;
 }
 
 .availGridCell.is-busy{
-  background:var(--header-navy) !important;
+  background:var(--avail-occupied) !important;
 }
 
-.availGridCell:hover{
+.availGridCell.is-conflict{
+  background:#dc2626 !important;
+}
+
+.availGridCell.is-busy:hover{
+  background:var(--avail-occupied-strong) !important;
+}
+
+.availGridCell.is-conflict:hover{
+  background:#b91c1c !important;
+}
+
+.availGridCell.is-free:hover{
   filter:brightness(0.96);
+}
+
+.availConflictBanner{
+  margin:0 0 12px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(220, 38, 38, .25);
+  background:rgba(220, 38, 38, .08);
+  color:#b91c1c;
+  font-size:13px;
+  font-weight:800;
+}
+
+button.availNowRow.is-conflict .availNowBadge,
+button.availRoomRow.is-conflict .availStatusBadge{
+  background:rgba(220, 38, 38, .14);
+  color:#b91c1c;
+}
+
+button.availNowRow.is-conflict{
+  background:rgba(220, 38, 38, .04) !important;
+}
+
+button.availRoomRow.is-conflict{
+  border-color:rgba(220, 38, 38, .28);
+  background:rgba(220, 38, 38, .05) !important;
+}
+
+button.availRoomRow.is-conflict .availRoomDetail{
+  color:#b91c1c;
+}
+
+.availDayConflictFlag{
+  margin:8px 0 0;
+  padding:8px 10px;
+  border-radius:10px;
+  background:rgba(220, 38, 38, .10);
+  color:#b91c1c;
+  font-size:13px;
+  font-weight:800;
+}
+
+button.availDayEvent.is-conflict{
+  background:#dc2626 !important;
+  box-shadow:0 6px 16px rgba(185, 28, 28, .28) !important;
+}
+
+.availDayConflictTag,
+.availDaySourceTag{
+  margin-top:2px;
+  padding:1px 6px;
+  border-radius:999px;
+  background:rgba(255,255,255,.22);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+}
+
+.availDaySourceTag{
+  background:rgba(0, 0, 0, .18);
+}
+
+.availDayEvent.is-compact .availDayConflictTag,
+.availDayEvent.is-compact .availDaySourceTag{
+  display:none;
 }
 
 .availDayModal{
@@ -746,25 +949,51 @@ button.availGridRoom{
   max-height:min(90vh, 820px);
   display:flex;
   flex-direction:column;
+  overflow:hidden;
 }
 
 .availDayBody{
+  flex:1 1 auto;
+  min-height:0;
   overflow:auto;
-  max-height:min(62vh, 560px);
-  padding-top:4px;
+  -webkit-overflow-scrolling:touch;
+  max-height:none;
+  padding:4px 0 0;
+  overscroll-behavior:contain;
+}
+
+.availDayScrollPad{
+  height:96px;
+  flex:none;
+  pointer-events:none;
+}
+
+.availDayModal > .modalActions{
+  flex:0 0 auto;
+  position:relative;
+  z-index:6;
+  margin:0;
+  padding:12px 16px 16px;
+  border-top:1px solid rgba(12, 26, 54, .08);
+  background:rgba(255,255,255,.96);
 }
 
 .availDayTimeline{
   position:relative;
+  flex:0 0 auto;
   margin-left:54px;
+  margin-right:4px;
   border-left:1px solid rgba(12, 26, 54, .12);
+  touch-action:none;
+  cursor:crosshair;
+  --avail-hour-px: 87px;
   background:
     repeating-linear-gradient(
       to bottom,
       transparent,
-      transparent calc(60px * 1.1 - 1px),
-      rgba(12, 26, 54, .06) calc(60px * 1.1 - 1px),
-      rgba(12, 26, 54, .06) calc(60px * 1.1)
+      transparent calc(var(--avail-hour-px) - 1px),
+      rgba(12, 26, 54, .06) calc(var(--avail-hour-px) - 1px),
+      rgba(12, 26, 54, .06) var(--avail-hour-px)
     );
 }
 
@@ -785,6 +1014,10 @@ button.availGridRoom{
   color:var(--muted);
 }
 
+.availDayHour.is-end{
+  transform:translateY(-100%);
+}
+
 .availDayHourLine{
   position:absolute;
   left:0;
@@ -793,10 +1026,23 @@ button.availGridRoom{
   background:rgba(12, 26, 54, .08);
 }
 
+.availDayHourLine,
+.availDayHours,
+.availDayNowLine{
+  pointer-events:none;
+}
+
 .availDayTrack{
-  position:relative;
-  height:100%;
+  position:absolute;
+  inset:0;
+  z-index:1;
   padding-right:8px;
+  pointer-events:none;
+}
+
+.availDayTimeline.is-dragging{
+  cursor:ns-resize;
+  user-select:none;
 }
 
 .availDayEmpty{
@@ -805,6 +1051,323 @@ button.availGridRoom{
   color:var(--muted);
   font-weight:700;
   font-size:14px;
+  pointer-events:none;
+}
+
+.availDaySelectGhost{
+  position:absolute;
+  left:4px;
+  right:8px;
+  z-index:4;
+  display:flex;
+  align-items:flex-start;
+  padding:6px 8px;
+  border-radius:10px;
+  border:1px dashed rgba(0, 36, 125, .45);
+  background:rgba(0, 36, 125, .14);
+  color:var(--header-navy);
+  font-size:12px;
+  font-weight:800;
+  pointer-events:none;
+  box-sizing:border-box;
+}
+
+.availCreateModal{
+  max-width:420px;
+}
+
+.availCreateHeader{
+  padding-bottom:4px;
+}
+
+.availCreateMeta{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:2px;
+}
+
+.availCreateMetaRoom{
+  display:inline-flex;
+  align-items:center;
+  padding:4px 10px;
+  border-radius:999px;
+  background:rgba(0, 36, 125, .10);
+  color:var(--header-navy);
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:-0.01em;
+}
+
+.availCreateMetaSep{
+  color:rgba(12, 26, 54, .35);
+  font-weight:700;
+}
+
+.availCreateMetaDate{
+  color:var(--ink);
+  font-size:14px;
+  font-weight:750;
+}
+
+.availCreateForm{
+  gap:14px !important;
+  padding-top:4px !important;
+}
+
+.availCreateTimeCard{
+  margin:0;
+  padding:12px 12px 10px;
+  border-radius:16px;
+  border:1px solid rgba(12, 26, 54, .10);
+  background:linear-gradient(180deg, rgba(0, 36, 125, .04), rgba(255,255,255,.9));
+}
+
+.availCreateTimeCard .availCreateCalsLabel{
+  margin-bottom:10px;
+}
+
+.availCreateTimes{
+  display:grid;
+  grid-template-columns:1fr 28px 1fr;
+  align-items:stretch;
+  gap:8px;
+}
+
+.availCreateTimePick{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+  margin:0;
+  cursor:pointer;
+}
+
+.availCreateTimePickLabel{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+
+.availCreateTimePickShell{
+  position:relative;
+  display:block;
+  border-radius:14px;
+  background:#fff;
+  border:1.5px solid rgba(12, 26, 54, .12);
+  box-shadow:0 1px 0 rgba(12, 26, 54, .04);
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+
+.availCreateTimePickShell::after{
+  content:"";
+  position:absolute;
+  right:14px;
+  top:50%;
+  width:7px;
+  height:7px;
+  border-right:2px solid rgba(12, 26, 54, .35);
+  border-bottom:2px solid rgba(12, 26, 54, .35);
+  transform:translateY(-60%) rotate(45deg);
+  pointer-events:none;
+}
+
+.availCreateTimePickShell:focus-within{
+  border-color:var(--header-navy);
+  box-shadow:0 0 0 3px rgba(0, 36, 125, .12);
+}
+
+.availCreateTimePickShell select{
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
+  width:100%;
+  min-height:52px;
+  margin:0;
+  padding:0 36px 0 14px;
+  border:0 !important;
+  border-radius:14px;
+  background:transparent !important;
+  box-shadow:none !important;
+  color:var(--header-navy);
+  font-size:22px;
+  font-weight:900;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-0.03em;
+  line-height:1;
+  cursor:pointer;
+}
+
+.availCreateTimeArrow{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  align-self:end;
+  height:52px;
+  margin-bottom:0;
+  color:rgba(12, 26, 54, .28);
+}
+
+.availCreateTimeArrowLine{
+  display:block;
+  width:14px;
+  height:2px;
+  border-radius:2px;
+  background:currentColor;
+  position:relative;
+}
+
+.availCreateTimeArrowLine::after{
+  content:"";
+  position:absolute;
+  right:-1px;
+  top:50%;
+  width:7px;
+  height:7px;
+  border-right:2px solid currentColor;
+  border-top:2px solid currentColor;
+  transform:translateY(-50%) rotate(45deg);
+}
+
+.availCreateDuration{
+  margin:10px 0 0;
+  color:var(--header-navy);
+  font-size:13px;
+  font-weight:800;
+}
+
+.availCreateDuration.is-invalid{
+  color:#b91c1c;
+}
+
+.availCreateTimes .field{
+  flex:none;
+  min-width:0;
+  margin:0;
+}
+
+.availCreateTitleField{
+  margin:0;
+  flex:none;
+  min-width:0;
+  width:100%;
+}
+
+.availCreateTitleField input[type="text"]{
+  min-height:48px;
+  font-size:16px;
+  font-weight:700;
+}
+
+.availCreateHint{
+  margin:8px 0 0;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:600;
+  line-height:1.35;
+}
+
+.availCreateHint strong{
+  color:var(--header-navy);
+  font-weight:800;
+}
+
+.availCreateCals{
+  margin:0;
+  padding:0;
+  border:0;
+}
+
+.availCreateCalsLabel{
+  margin:0 0 8px;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+
+.availCreateCalGrid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.availCreateCalChip{
+  position:relative;
+  display:block;
+  margin:0;
+  cursor:pointer;
+}
+
+.availCreateCalChip input{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+
+.availCreateCalChipFace{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:48px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1.5px solid rgba(12, 26, 54, .14);
+  background:rgba(255,255,255,.96);
+  color:var(--ink);
+  font-size:13px;
+  font-weight:800;
+  text-align:center;
+  transition:border-color .15s ease, background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+
+.availCreateCalChip input:checked + .availCreateCalChipFace{
+  border-color:var(--header-navy);
+  background:rgba(0, 36, 125, .08);
+  color:var(--header-navy);
+  box-shadow:inset 0 0 0 1px rgba(0, 36, 125, .12);
+}
+
+.availCreateCalChip:hover .availCreateCalChipFace{
+  border-color:rgba(0, 36, 125, .35);
+}
+
+.availCreateCalChip input:focus-visible + .availCreateCalChipFace{
+  outline:3px solid rgba(24, 59, 255, .28);
+  outline-offset:2px;
+}
+
+.availCreateError{
+  margin:0;
+  color:#b91c1c;
+  font-size:13px;
+  font-weight:700;
+}
+
+.availCreateActions{
+  margin:2px 0 0;
+  padding:4px 0 0 !important;
+  gap:10px;
+  justify-content:stretch;
+}
+
+.availCreateActions #availCreateSubmit{
+  flex:1 1 auto;
+  min-width:0;
+}
+
+.availCreateActions .btnSecondary{
+  flex:0 0 auto;
+}
+
+@media (max-width:420px){
+  .availCreateCalGrid{
+    grid-template-columns:1fr;
+  }
 }
 
 button.availDayEvent{
@@ -813,11 +1376,14 @@ button.availDayEvent{
   right:auto;
   width:calc((100% / var(--event-cols)) - 8px);
   min-width:0;
+  z-index:3;
+  pointer-events:auto;
   display:flex;
   flex-direction:column;
   align-items:flex-start;
+  justify-content:flex-start;
   gap:2px;
-  padding:6px 10px;
+  padding:5px 8px;
   border:0;
   border-radius:10px;
   background:var(--header-navy) !important;
@@ -829,29 +1395,45 @@ button.availDayEvent{
 }
 
 .availDayEventTime{
+  flex:0 0 auto;
   font-size:11px;
   font-weight:800;
-  opacity:.9;
+  opacity:.92;
   white-space:nowrap;
+  line-height:1.15;
 }
 
 .availDayEventTitle{
-  font-size:13px;
+  font-size:12px;
   font-weight:800;
   line-height:1.25;
   display:-webkit-box;
   -webkit-line-clamp:3;
   -webkit-box-orient:vertical;
   overflow:hidden;
+  word-break:break-word;
 }
 
+/* Half-hour / short blocks: keep both time and name visible on one/two tight lines */
 .availDayEvent.is-compact{
-  justify-content:center;
+  gap:1px;
   padding:4px 7px;
+  justify-content:center;
+}
+
+.availDayEvent.is-compact .availDayEventTime{
+  font-size:10px;
 }
 
 .availDayEvent.is-compact .availDayEventTitle{
-  display:none;
+  display:block;
+  font-size:11px;
+  line-height:1.2;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  overflow:hidden;
+  -webkit-line-clamp:unset;
+  -webkit-box-orient:unset;
 }
 
 .availDayNowLine{
@@ -1641,22 +2223,33 @@ button.btnRefresh:active{
     flex:1 1 0;
   }
 
-  .availNowCards{
-    grid-template-columns:repeat(2, minmax(0, 1fr));
-    gap:10px;
+  button.availNowRow{
+    grid-template-columns:minmax(0, 1fr) auto;
+    gap:8px 10px;
+    padding:12px 14px;
+    min-height:58px;
   }
 
-  button.availNowCard{
-    min-height:108px;
-    padding:14px;
+  .availNowChevron{
+    display:none;
   }
 
-  .availNowState{
-    font-size:24px;
+  .availNowUntil{
+    white-space:normal;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
   }
 
   .availRoomName{
     font-size:15px;
+  }
+
+  .availNowSection,
+  .availOverviewSection,
+  .availCheckSection{
+    margin-bottom:22px;
+    padding-bottom:18px;
   }
 
   .availDayModal{
@@ -1664,23 +2257,36 @@ button.btnRefresh:active{
   }
 
   .availDayBody{
-    max-height:58vh;
+    max-height:none;
+  }
+
+  .availDayScrollPad{
+    height:112px;
   }
 
   .availGrid{
-    min-width:max(100%, calc(72px + var(--avail-cols) * 14px));
-    padding:8px 8px 12px;
+    min-width:max(100%, calc(92px + var(--avail-cols) * 18px));
+    padding:10px 10px 12px;
   }
 
   .availGridHead,
   .availGridRow{
-    grid-template-columns:72px repeat(var(--avail-cols), minmax(12px, 1fr));
-    gap:2px;
+    grid-template-columns:92px repeat(var(--avail-cols), minmax(16px, 1fr));
+    gap:3px;
+  }
+
+  .availGridTime{
+    font-size:11px;
   }
 
   .availGridCell{
-    height:18px;
-    border-radius:3px;
+    height:22px;
+    border-radius:4px;
+  }
+
+  .availGridLegendNote{
+    margin-left:0;
+    width:100%;
   }
 
   .scheduleList{
