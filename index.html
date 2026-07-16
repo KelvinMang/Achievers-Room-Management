@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Room Finder</title>
   <link rel="icon" type="image/png" href="./favicon.png" />
-  <link rel="stylesheet" href="./styles.css?v=38" />
+  <link rel="stylesheet" href="./styles.css?v=41" />
   <meta name="theme-color" content="#00247d" />
 </head>
 <body>
@@ -114,11 +114,41 @@
           </div>
 
           <div id="availContent" hidden>
-            <section class="availNowSection" aria-label="Free now">
+            <section class="availNowSection" aria-label="Free rooms">
               <div class="availSectionHead">
-                <p class="availSectionTitle">Free now</p>
+                <p class="availSectionTitle" id="availNowTitle">Free now</p>
                 <p class="availSectionMeta" id="availNowMeta">Loading…</p>
               </div>
+
+              <form class="availControls is-live-now" id="availForm" autocomplete="off" onsubmit="event.preventDefault();">
+                <div class="field availDateField">
+                  <label for="availDate">Date</label>
+                  <input id="availDate" type="date" name="avail-date" required />
+                </div>
+
+                <div class="availLiveChip" id="availLiveChip" aria-live="polite">
+                  <span class="availLiveDot" aria-hidden="true"></span>
+                  <span class="availLiveChipLabel">Live now</span>
+                  <span class="availLiveChipTime" id="availLiveChipTime"></span>
+                </div>
+
+                <div class="availTimeFields" id="availTimeFields" hidden>
+                  <div class="field">
+                    <label for="availStart">From</label>
+                    <select id="availStart" name="avail-start"></select>
+                  </div>
+                  <div class="field">
+                    <label for="availEnd">To</label>
+                    <select id="availEnd" name="avail-end"></select>
+                  </div>
+                </div>
+
+                <div class="searchBtnWrap">
+                  <button type="button" id="availModeToggleBtn" class="btnRefresh">Pick times</button>
+                </div>
+              </form>
+
+              <p class="availResultTally" id="availNowTally" role="status" aria-live="polite"></p>
               <div id="availNowCards" class="availNowByFloor"></div>
             </section>
 
@@ -129,39 +159,12 @@
               </div>
               <div id="availGridWrap" class="availGridWrap" aria-label="Day schedule grid"></div>
             </section>
-
-            <section class="availCheckSection" aria-label="Check a timeslot">
-              <div class="availSectionHead">
-                <p class="availSectionTitle">Check a timeslot</p>
-                <p class="availSectionMeta">Find free rooms for a specific window</p>
-              </div>
-
-              <form class="availControls" id="availForm" autocomplete="off" onsubmit="event.preventDefault(); checkAvailability();">
-                <div class="field">
-                  <label for="availDate">Date</label>
-                  <input id="availDate" type="date" name="avail-date" required />
-                </div>
-                <div class="field">
-                  <label for="availStart">From</label>
-                  <select id="availStart" name="avail-start"></select>
-                </div>
-                <div class="field">
-                  <label for="availEnd">To</label>
-                  <select id="availEnd" name="avail-end"></select>
-                </div>
-                <div class="searchBtnWrap">
-                  <button type="submit" id="availCheckBtn">Check rooms</button>
-                </div>
-              </form>
-
-              <div id="availSummary" class="availSummary" role="status" aria-live="polite"></div>
-            </section>
           </div>
         </div>
       </section>
     </main>
   </div>
 
-  <script src="./app.js?v=38"></script>
+  <script src="./app.js?v=42"></script>
 </body>
 </html>
