@@ -4,13 +4,17 @@
  * Deploy as Web App (Execute as: Me, Who has access: Anyone).
  * Endpoints:
  *   ?mode=board&day=today|tomorrow&key=STAFF_KEY
+ *   ?mode=availability&date=yyyy-MM-dd&start=HH:mm&end=HH:mm&key=STAFF_KEY&token=...
+ *   POST { action:"loginAvailability", key, password } → { token }
  *   ?mode=search&name=...&role=...&day=today|tomorrow&key=STAFF_KEY|TUTOR_KEY
  *
  * Public (no key): student role only, no lesson titles.
  * Tutor key: tutor search only (no floor board).
  * Staff key: student + tutor search + floor board.
+ * 13/F availability: staff key + AVAILABILITY_PASSWORD (Script Property) + session token.
  *
  * Keep STAFF_KEY / TUTOR_KEY in sync with app.js.
+ * Set Script Property AVAILABILITY_PASSWORD (do not commit the real password).
  */
 var STAFF_KEY = "achievers-wc-staff-2026";
 var TUTOR_KEY = "achievers-tutor";
@@ -19,8 +23,17 @@ var SCRIPT_TZ = "Asia/Hong_Kong";
 var WAN_CHAI_CALENDAR_ID = "admin@achievershk.com";
 var PRINCE_EDWARD_CALENDAR_ID =
   "c_28fff8f0d02e4c32dd8f2ddbdf058fd2218371f55f10e8c905e2f56b99d541f1@group.calendar.google.com";
+var HELIOS_13F_CALENDAR_ID = "admissions@helios-edu.com";
 
 var BOARD_FLOORS = ["13", "10", "8"];
+var AVAIL_ROOMS = ["CEO", "1309A", "1309B", "1309C", "1309D", "1309E", "1309G"];
+var AVAIL_GRID_START = "09:00";
+var AVAIL_GRID_END = "21:00";
+var AVAIL_DEFAULT_START = "09:00";
+var AVAIL_DEFAULT_END = "18:00";
+var AVAIL_SLOT_MINUTES = 30;
+var AVAIL_TOKEN_TTL_SECONDS = 6 * 60 * 60;
+var AVAIL_TOKEN_CACHE_PREFIX = "avail_tok_";
 var SUBJECT_STOPWORDS = {
   igcse: true,
   alevel: true,
@@ -89,7 +102,35 @@ function doGet(e) {
     return json(buildBoard(params));
   }
 
+  if (mode === "availability") {
+    if (!access.staff) {
+      return json({ error: "Staff access required", authRequired: true, rooms: null });
+    }
+    if (!isValidAvailToken(params && params.token)) {
+      return json({ error: "Password required", authRequired: true, rooms: null });
+    }
+    return json(buildAvailability(params));
+  }
+
   return json(runSearch(params, access));
+}
+
+function doPost(e) {
+  var body = {};
+  try {
+    if (e && e.postData && e.postData.contents) {
+      body = JSON.parse(e.postData.contents) || {};
+    }
+  } catch (err) {
+    return json({ error: "Invalid request body" });
+  }
+
+  var action = String(body.action || "").trim();
+  if (action === "loginAvailability") {
+    return json(loginAvailability(body));
+  }
+
+  return json({ error: "Unknown action" });
 }
 
 function resolveAccess(params) {
@@ -103,6 +144,54 @@ function resolveAccess(params) {
     canSearchTutor: staff || tutor,
     canSearchStudent: staff || (!staff && !tutor)
   };
+}
+
+function getAvailabilityPassword() {
+  try {
+    return String(PropertiesService.getScriptProperties().getProperty("AVAILABILITY_PASSWORD") || "").trim();
+  } catch (err) {
+    return "";
+  }
+}
+
+function loginAvailability(body) {
+  var key = String((body && body.key) || "").trim();
+  var password = String((body && body.password) || "").trim();
+  var expected = getAvailabilityPassword();
+
+  if (!STAFF_KEY || key !== STAFF_KEY) {
+    return { error: "Staff access required", authRequired: true };
+  }
+  if (!expected) {
+    return {
+      error: "AVAILABILITY_PASSWORD is not set in Script Properties",
+      authRequired: true
+    };
+  }
+  if (password !== expected) {
+    return { error: "Incorrect password", authRequired: true };
+  }
+
+  var token =
+    Utilities.getUuid().replace(/-/g, "") +
+    Utilities.getUuid().replace(/-/g, "").slice(0, 16);
+  CacheService.getScriptCache().put(AVAIL_TOKEN_CACHE_PREFIX + token, "1", AVAIL_TOKEN_TTL_SECONDS);
+
+  return {
+    ok: true,
+    token: token,
+    expiresInSeconds: AVAIL_TOKEN_TTL_SECONDS
+  };
+}
+
+function isValidAvailToken(token) {
+  var t = String(token || "").trim();
+  if (!t) return false;
+  try {
+    return !!CacheService.getScriptCache().get(AVAIL_TOKEN_CACHE_PREFIX + t);
+  } catch (err) {
+    return false;
+  }
 }
 
 // ===== Board =====
@@ -150,6 +239,293 @@ function buildBoard(params) {
     date: Utilities.formatDate(range.start, SCRIPT_TZ, "yyyy-MM-dd"),
     floors: floors
   };
+}
+
+// ===== 13/F Availability (Helios calendar) =====
+
+function buildAvailability(params) {
+  var dateStr = normalizeAvailDate(params && params.date);
+  var queryStartStr = normalizeAvailTime(params && params.start, AVAIL_DEFAULT_START);
+  var queryEndStr = normalizeAvailTime(params && params.end, AVAIL_DEFAULT_END);
+
+  if (timeToMinutes(queryEndStr) <= timeToMinutes(queryStartStr)) {
+    queryEndStr = AVAIL_DEFAULT_END;
+    if (timeToMinutes(queryEndStr) <= timeToMinutes(queryStartStr)) {
+      queryStartStr = AVAIL_DEFAULT_START;
+    }
+  }
+
+  var queryStart = parseDateTimeInTz(dateStr, queryStartStr);
+  var queryEnd = parseDateTimeInTz(dateStr, queryEndStr);
+
+  var now = new Date();
+  var todayStr = Utilities.formatDate(now, SCRIPT_TZ, "yyyy-MM-dd");
+  var nowLabel = Utilities.formatDate(now, SCRIPT_TZ, "HH:mm");
+  var isToday = dateStr === todayStr;
+
+  var slots = buildTimeSlots(AVAIL_GRID_START, AVAIL_GRID_END, AVAIL_SLOT_MINUTES);
+  var roomEvents = collectAvailRoomEvents(dateStr);
+  var todayRoomEvents = isToday ? roomEvents : collectAvailRoomEvents(todayStr);
+
+  var rooms = AVAIL_ROOMS.map(function (id) {
+    var dayList = roomEvents[id] || [];
+    var todayList = todayRoomEvents[id] || [];
+    var overlapping = dayList.filter(function (ev) {
+      return datesOverlap(ev.start, ev.end, queryStart, queryEnd);
+    });
+    var nowStatus = computeNowStatus(todayList, now);
+
+    return {
+      id: id,
+      label: availRoomLabel(id),
+      status: overlapping.length ? "busy" : "available",
+      events: overlapping.map(serializeAvailEvent),
+      dayEvents: dayList.map(serializeAvailEvent),
+      todayEvents: todayList.map(serializeAvailEvent),
+      now: nowStatus
+    };
+  });
+
+  var grid = {};
+  var gridMeta = {};
+  AVAIL_ROOMS.forEach(function (id) {
+    grid[id] = slots.map(function () {
+      return false;
+    });
+    gridMeta[id] = slots.map(function () {
+      return null;
+    });
+
+    (roomEvents[id] || []).forEach(function (ev) {
+      slots.forEach(function (slot, idx) {
+        var slotStart = parseDateTimeInTz(dateStr, slot);
+        var slotEnd = new Date(slotStart.getTime() + AVAIL_SLOT_MINUTES * 60 * 1000);
+        if (datesOverlap(ev.start, ev.end, slotStart, slotEnd)) {
+          grid[id][idx] = true;
+          if (!gridMeta[id][idx]) {
+            gridMeta[id][idx] = serializeAvailEvent(ev);
+          }
+        }
+      });
+    });
+  });
+
+  return {
+    date: dateStr,
+    start: queryStartStr,
+    end: queryEndStr,
+    today: todayStr,
+    now: nowLabel,
+    isToday: isToday,
+    gridStart: AVAIL_GRID_START,
+    gridEnd: AVAIL_GRID_END,
+    rooms: rooms,
+    slots: slots,
+    grid: grid,
+    gridMeta: gridMeta
+  };
+}
+
+function collectAvailRoomEvents(dateStr) {
+  var dayStart = parseDateTimeInTz(dateStr, "00:00");
+  var dayEnd = parseDateTimeInTz(dateStr, "23:59");
+  dayEnd.setSeconds(59, 999);
+
+  var roomEvents = {};
+  AVAIL_ROOMS.forEach(function (id) {
+    roomEvents[id] = [];
+  });
+
+  var events = getEventsForCalendars([HELIOS_13F_CALENDAR_ID], dayStart, dayEnd);
+  events.forEach(function (item) {
+    var ev = item.ev;
+    var title = ev.getTitle() || "";
+    if (isCancelled(title)) return;
+
+    var desc = ev.getDescription() || "";
+    var locationField = ev.getLocation() || "";
+    var roomId = matchAvailRoom(title, desc, locationField);
+    if (!roomId || !roomEvents.hasOwnProperty(roomId)) return;
+
+    var evStart = ev.getStartTime();
+    var evEnd = ev.getEndTime();
+    roomEvents[roomId].push({
+      title: title,
+      start: evStart,
+      end: evEnd,
+      startLabel: Utilities.formatDate(evStart, SCRIPT_TZ, "HH:mm"),
+      endLabel: Utilities.formatDate(evEnd, SCRIPT_TZ, "HH:mm")
+    });
+  });
+
+  AVAIL_ROOMS.forEach(function (id) {
+    roomEvents[id].sort(function (a, b) {
+      return new Date(a.start) - new Date(b.start);
+    });
+  });
+
+  return roomEvents;
+}
+
+function serializeAvailEvent(ev) {
+  return {
+    title: ev.title,
+    start: ev.startLabel,
+    end: ev.endLabel
+  };
+}
+
+function mergeBusyIntervals(events) {
+  var intervals = (events || [])
+    .map(function (ev) {
+      return { start: new Date(ev.start).getTime(), end: new Date(ev.end).getTime(), title: ev.title };
+    })
+    .filter(function (iv) {
+      return iv.end > iv.start;
+    })
+    .sort(function (a, b) {
+      return a.start - b.start;
+    });
+
+  if (!intervals.length) return [];
+
+  var merged = [intervals[0]];
+  for (var i = 1; i < intervals.length; i++) {
+    var cur = intervals[i];
+    var last = merged[merged.length - 1];
+    if (cur.start <= last.end) {
+      if (cur.end > last.end) last.end = cur.end;
+      if (!last.title && cur.title) last.title = cur.title;
+    } else {
+      merged.push(cur);
+    }
+  }
+  return merged;
+}
+
+function computeNowStatus(dayEvents, now) {
+  var nowMs = now.getTime();
+  var merged = mergeBusyIntervals(dayEvents);
+
+  for (var i = 0; i < merged.length; i++) {
+    var iv = merged[i];
+    if (iv.start <= nowMs && nowMs < iv.end) {
+      var active = null;
+      for (var j = 0; j < dayEvents.length; j++) {
+        var ev = dayEvents[j];
+        if (ev.start.getTime() <= nowMs && nowMs < ev.end.getTime()) {
+          active = ev;
+          break;
+        }
+      }
+      return {
+        status: "busy",
+        until: Utilities.formatDate(new Date(iv.end), SCRIPT_TZ, "HH:mm"),
+        summary: "Busy until " + Utilities.formatDate(new Date(iv.end), SCRIPT_TZ, "HH:mm"),
+        eventTitle: active ? active.title : iv.title || ""
+      };
+    }
+    if (iv.start > nowMs) {
+      return {
+        status: "available",
+        until: Utilities.formatDate(new Date(iv.start), SCRIPT_TZ, "HH:mm"),
+        summary: "Free until " + Utilities.formatDate(new Date(iv.start), SCRIPT_TZ, "HH:mm"),
+        eventTitle: ""
+      };
+    }
+  }
+
+  return {
+    status: "available",
+    until: null,
+    summary: "Free for the rest of today",
+    eventTitle: ""
+  };
+}
+
+function availRoomLabel(id) {
+  if (id === "CEO") return "CEO Room";
+  return id;
+}
+
+function matchAvailRoom(title, desc, location) {
+  var text = [title, location, desc].join(" ");
+  if (!text) return null;
+
+  // Explicit 13/F room codes: "1309A:", "1309 A", "1309 Room C"
+  var roomMatch = String(text).match(/\b1309\s*(?:Room\s*)?([A-EGa-eg])\b/i);
+  if (roomMatch) {
+    return "1309" + String(roomMatch[1]).toUpperCase();
+  }
+
+  // Helios titles often use "CEO Room: …"
+  if (/\bCEO\s*Room\b/i.test(text) || /(^|[\s:])CEO\s*:/i.test(text)) {
+    return "CEO";
+  }
+
+  // Short form on this calendar only: "Room B: …" → 1309B (ignore 804E etc.)
+  if (/\b\d{3,4}\s*(?:Room\s*)?[A-Za-z]\b/i.test(text) && !/\b1309\b/i.test(text)) {
+    return null;
+  }
+  var shortRoom = String(text).match(/(?:^|[\s:])Room\s*([A-EGa-eg])\b/i);
+  if (shortRoom) {
+    return "1309" + String(shortRoom[1]).toUpperCase();
+  }
+
+  return null;
+}
+
+function normalizeAvailDate(raw) {
+  var s = String(raw || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return Utilities.formatDate(new Date(), SCRIPT_TZ, "yyyy-MM-dd");
+}
+
+function normalizeAvailTime(raw, fallback) {
+  var s = String(raw || "").trim();
+  var m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return fallback;
+  var h = parseInt(m[1], 10);
+  var min = parseInt(m[2], 10);
+  if (isNaN(h) || isNaN(min) || h < 0 || h > 23 || min < 0 || min > 59) return fallback;
+  if (min < 15) {
+    min = 0;
+  } else if (min < 45) {
+    min = 30;
+  } else {
+    min = 0;
+    h = (h + 1) % 24;
+  }
+  return pad2(h) + ":" + pad2(min);
+}
+
+function pad2(n) {
+  return (n < 10 ? "0" : "") + n;
+}
+
+function timeToMinutes(hhmm) {
+  var parts = String(hhmm || "").split(":");
+  return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+}
+
+function buildTimeSlots(startStr, endStr, stepMinutes) {
+  var slots = [];
+  var start = timeToMinutes(startStr);
+  var end = timeToMinutes(endStr);
+  for (var t = start; t < end; t += stepMinutes) {
+    slots.push(pad2(Math.floor(t / 60)) + ":" + pad2(t % 60));
+  }
+  return slots;
+}
+
+function parseDateTimeInTz(dateStr, timeStr) {
+  // Build a Date in SCRIPT_TZ by formatting a known instant is awkward in Apps Script;
+  // use Utilities.parseDate which respects the given timezone.
+  return Utilities.parseDate(dateStr + " " + timeStr + ":00", SCRIPT_TZ, "yyyy-MM-dd HH:mm:ss");
+}
+
+function datesOverlap(aStart, aEnd, bStart, bEnd) {
+  return aStart < bEnd && aEnd > bStart;
 }
 
 // ===== Search =====

@@ -1,13 +1,19 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbyOkNPd7RTUgtISDDqy8B8VLtJtgF_myu84RXbfzRihD1G1QmJQu2cPeJW1iMVf5PxZow/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbya1NUgktlSXAT2KonO9uUSMd5qu3S2_1AcngEadxrd6b3yaEr2HpeS46G4n6VmfsoLWg/exec";
+
 /** Must match keys in Code.gs. Change both sides when rotating. */
 const STAFF_KEY = "achievers-wc-staff-2026";
 const TUTOR_KEY = "achievers-tutor";
 const STAFF_SESSION_KEY = "achievers_staff_key";
 const TUTOR_SESSION_KEY = "achievers_tutor_key";
+const AVAIL_TOKEN_SESSION_KEY = "achievers_avail_token";
 
 const RESULTS_RESET_MS = 60 * 1000;
 const BOARD_REFRESH_MS = 60 * 1000;
+const AVAIL_REFRESH_MS = 60 * 1000;
 const BOARD_FLOORS = ["13", "10", "8"];
+const AVAIL_GRID_START_MIN = 9 * 60;
+const AVAIL_GRID_END_MIN = 21 * 60;
+const AVAIL_PX_PER_MIN = 1.1;
 
 const HELP_PHONE = "+852 5727 1209";
 const HELP_ADDRESS = "Room 1012, 10/F, Tai Yau Building, 181 Johnston Road, Wan Chai";
@@ -28,7 +34,9 @@ const TUTOR_HELP = {
 
 let resultsResetTimerId = null;
 let boardRefreshTimerId = null;
+let availRefreshTimerId = null;
 let boardData = null;
+let availData = null;
 let activeFloor = "13";
 let currentMode = "search";
 let staffMode = false;
@@ -37,6 +45,7 @@ let tutorMode = false;
 let selectedDay = "today";
 let lastSearchQuery = null;
 let lastSearchRole = "student";
+let availControlsReady = false;
 
 function dayQueryParam() {
   return `&day=${encodeURIComponent(selectedDay)}`;
@@ -195,7 +204,7 @@ function applyAccessMode() {
   updatePortalHelp();
 
   if (staffMode) {
-    if (subtitle) subtitle.textContent = "Staff mode — search or open the floor board.";
+    if (subtitle) subtitle.textContent = "Staff mode — search, floor board, or 13/F availability.";
     if (nameLabel) nameLabel.textContent = "Student / Tutor name";
     if (nameInput) nameInput.placeholder = "Enter student or tutor name (e.g. Peter Chan)";
   } else if (tutorMode) {
@@ -293,6 +302,13 @@ function cancelBoardRefresh() {
   }
 }
 
+function cancelAvailRefresh() {
+  if (availRefreshTimerId !== null) {
+    clearTimeout(availRefreshTimerId);
+    availRefreshTimerId = null;
+  }
+}
+
 function scheduleResultsReset(div) {
   cancelResultsReset();
   resultsResetTimerId = setTimeout(() => {
@@ -333,33 +349,48 @@ function resetSearch() {
 }
 
 function setMode(mode) {
-  if (mode === "board" && !staffMode) {
+  if ((mode === "board" || mode === "availability") && !staffMode) {
     mode = "search";
   }
 
-  currentMode = mode === "board" ? "board" : "search";
+  if (mode === "board") currentMode = "board";
+  else if (mode === "availability") currentMode = "availability";
+  else currentMode = "search";
 
   const searchPanel = document.getElementById("searchPanel");
   const boardPanel = document.getElementById("boardPanel");
+  const availPanel = document.getElementById("availPanel");
   const searchBtn = document.getElementById("modeSearchBtn");
   const boardBtn = document.getElementById("modeBoardBtn");
+  const availBtn = document.getElementById("modeAvailBtn");
 
   const isSearch = currentMode === "search";
+  const isBoard = currentMode === "board";
+  const isAvail = currentMode === "availability";
 
   if (searchPanel) searchPanel.hidden = !isSearch;
-  if (boardPanel) boardPanel.hidden = isSearch || !staffMode;
+  if (boardPanel) boardPanel.hidden = !isBoard || !staffMode;
+  if (availPanel) availPanel.hidden = !isAvail || !staffMode;
 
   searchBtn?.classList.toggle("is-active", isSearch);
-  boardBtn?.classList.toggle("is-active", !isSearch);
+  boardBtn?.classList.toggle("is-active", isBoard);
+  availBtn?.classList.toggle("is-active", isAvail);
   searchBtn?.setAttribute("aria-selected", String(isSearch));
-  boardBtn?.setAttribute("aria-selected", String(!isSearch));
+  boardBtn?.setAttribute("aria-selected", String(isBoard));
+  availBtn?.setAttribute("aria-selected", String(isAvail));
 
+  cancelBoardRefresh();
+  cancelAvailRefresh();
   if (isSearch) {
-    cancelBoardRefresh();
-  } else {
+    // leave search as-is
+  } else if (isBoard) {
     cancelResultsReset();
     document.querySelectorAll(".modalOverlay").forEach(el => el.remove());
     loadBoard();
+  } else if (isAvail) {
+    cancelResultsReset();
+    document.querySelectorAll(".modalOverlay").forEach(el => el.remove());
+    enterAvailabilityMode();
   }
 }
 
@@ -369,6 +400,10 @@ function initModeSwitch() {
     if (!staffMode) return;
     setMode("board");
   });
+  document.getElementById("modeAvailBtn")?.addEventListener("click", () => {
+    if (!staffMode) return;
+    setMode("availability");
+  });
 
   document.getElementById("floorTabs")?.addEventListener("click", e => {
     const tab = e.target.closest(".floorTab");
@@ -377,6 +412,15 @@ function initModeSwitch() {
     if (!floor) return;
     setActiveFloor(floor);
     renderBoard();
+  });
+
+  document.getElementById("availUnlockBtn")?.addEventListener("click", () => {
+    promptAvailPassword();
+  });
+  document.getElementById("availLogoutBtn")?.addEventListener("click", () => {
+    clearAvailToken();
+    availData = null;
+    updateAvailAuthUI(false);
   });
 }
 
@@ -967,6 +1011,723 @@ function cleanBoardStudentName(raw) {
   return val;
 }
 
+// ===== 13/F Availability =====
+
+const AVAIL_TIME_OPTIONS = (() => {
+  const out = [];
+  for (let t = 9 * 60; t <= 21 * 60; t += 30) {
+    const h = Math.floor(t / 60);
+    const m = t % 60;
+    out.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+  }
+  return out;
+})();
+
+function getAvailToken() {
+  return sessionStorage.getItem(AVAIL_TOKEN_SESSION_KEY) || "";
+}
+
+function setAvailToken(token) {
+  if (token) sessionStorage.setItem(AVAIL_TOKEN_SESSION_KEY, token);
+  else sessionStorage.removeItem(AVAIL_TOKEN_SESSION_KEY);
+}
+
+function clearAvailToken() {
+  sessionStorage.removeItem(AVAIL_TOKEN_SESSION_KEY);
+}
+
+function availTokenQueryParam() {
+  const token = getAvailToken();
+  return token ? `&token=${encodeURIComponent(token)}` : "";
+}
+
+function todayDateInputValue() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function fillTimeSelect(selectEl, selected) {
+  if (!selectEl) return;
+  selectEl.innerHTML = "";
+  AVAIL_TIME_OPTIONS.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    if (t === selected) opt.selected = true;
+    selectEl.appendChild(opt);
+  });
+}
+
+function ensureAvailControlsReady() {
+  if (availControlsReady) return;
+  const dateInput = document.getElementById("availDate");
+  const startSelect = document.getElementById("availStart");
+  const endSelect = document.getElementById("availEnd");
+  if (!dateInput || !startSelect || !endSelect) return;
+
+  if (!dateInput.value) dateInput.value = todayDateInputValue();
+  fillTimeSelect(startSelect, "09:00");
+  fillTimeSelect(endSelect, "18:00");
+  availControlsReady = true;
+}
+
+function getAvailQuery() {
+  ensureAvailControlsReady();
+  const date = document.getElementById("availDate")?.value || todayDateInputValue();
+  let start = document.getElementById("availStart")?.value || "09:00";
+  let end = document.getElementById("availEnd")?.value || "18:00";
+
+  const toMin = hhmm => {
+    const [h, m] = hhmm.split(":").map(Number);
+    return h * 60 + m;
+  };
+  if (toMin(end) <= toMin(start)) {
+    end = "18:00";
+    if (toMin(end) <= toMin(start)) start = "09:00";
+    const startSelect = document.getElementById("availStart");
+    const endSelect = document.getElementById("availEnd");
+    if (startSelect) startSelect.value = start;
+    if (endSelect) endSelect.value = end;
+  }
+
+  return { date, start, end };
+}
+
+function updateAvailAuthUI(unlocked) {
+  const gate = document.getElementById("availGate");
+  const content = document.getElementById("availContent");
+  const logoutBtn = document.getElementById("availLogoutBtn");
+  const refreshBtn = document.getElementById("availRefreshBtn");
+  const sub = document.getElementById("availSub");
+
+  if (gate) gate.hidden = !!unlocked;
+  if (content) content.hidden = !unlocked;
+  if (logoutBtn) logoutBtn.hidden = !unlocked;
+  if (refreshBtn) refreshBtn.hidden = !unlocked;
+  if (sub) {
+    sub.textContent = unlocked
+      ? "Helios calendar — CEO Room & 1309A–E, G"
+      : "Password required · Helios calendar";
+  }
+}
+
+function enterAvailabilityMode() {
+  ensureAvailControlsReady();
+  if (!getAvailToken()) {
+    updateAvailAuthUI(false);
+    promptAvailPassword();
+    return;
+  }
+  updateAvailAuthUI(true);
+  loadAvailability();
+}
+
+function promptAvailPassword() {
+  document.querySelectorAll(".modalOverlay[data-avail-login]").forEach(el => el.remove());
+
+  const overlay = document.createElement("div");
+  overlay.className = "modalOverlay";
+  overlay.setAttribute("data-avail-login", "1");
+
+  const modal = document.createElement("div");
+  modal.className = "modal availLoginModal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "availLoginTitle");
+
+  modal.innerHTML = `
+    <div class="modalHeader">
+      <p class="modalTitle" id="availLoginTitle">13/F Availability</p>
+      <p class="modalSub">Enter password to view live room status</p>
+    </div>
+    <form class="modalBody availLoginForm" id="availLoginForm" autocomplete="off">
+      <div class="field">
+        <label for="availPassword">Password</label>
+        <input id="availPassword" type="password" name="avail-password" inputmode="numeric" autocomplete="off" required />
+      </div>
+      <p class="availLoginError" id="availLoginError" hidden></p>
+      <div class="modalActions availLoginActions">
+        <button type="button" class="btnSecondary" id="availLoginCancel">Cancel</button>
+        <button type="submit" id="availLoginSubmit">Unlock</button>
+      </div>
+    </form>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  const input = modal.querySelector("#availPassword");
+  const errEl = modal.querySelector("#availLoginError");
+  const form = modal.querySelector("#availLoginForm");
+  const cancelBtn = modal.querySelector("#availLoginCancel");
+  const submitBtn = modal.querySelector("#availLoginSubmit");
+
+  const close = () => overlay.remove();
+
+  cancelBtn?.addEventListener("click", () => {
+    close();
+    if (!getAvailToken()) updateAvailAuthUI(false);
+  });
+
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay) {
+      close();
+      if (!getAvailToken()) updateAvailAuthUI(false);
+    }
+  });
+
+  form?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const password = (input?.value || "").trim();
+    if (!password) return;
+
+    if (submitBtn) submitBtn.disabled = true;
+    if (errEl) {
+      errEl.hidden = true;
+      errEl.textContent = "";
+    }
+
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "loginAvailability",
+          key: STAFF_KEY,
+          password
+        })
+      });
+      const data = await res.json();
+      if (!data?.ok || !data?.token) {
+        throw new Error(data?.error || "Incorrect password");
+      }
+      setAvailToken(data.token);
+      close();
+      updateAvailAuthUI(true);
+      loadAvailability();
+    } catch (err) {
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = err.message || "Incorrect password";
+      }
+      input?.focus();
+      input?.select();
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  setTimeout(() => input?.focus(), 30);
+}
+
+function scheduleAvailRefresh() {
+  cancelAvailRefresh();
+  availRefreshTimerId = setTimeout(() => {
+    availRefreshTimerId = null;
+    if (currentMode === "availability" && getAvailToken()) {
+      loadAvailability({ silent: true });
+    }
+  }, AVAIL_REFRESH_MS);
+}
+
+async function loadAvailability(opts = {}) {
+  if (!staffMode) return;
+  if (!getAvailToken()) {
+    updateAvailAuthUI(false);
+    if (!opts.silent) promptAvailPassword();
+    return;
+  }
+
+  const nowCards = document.getElementById("availNowCards");
+  const summary = document.getElementById("availSummary");
+  const gridWrap = document.getElementById("availGridWrap");
+  const checkBtn = document.getElementById("availCheckBtn");
+  const refreshBtn = document.getElementById("availRefreshBtn");
+  if (!summary || !gridWrap || !nowCards) return;
+
+  const q = getAvailQuery();
+  if (checkBtn) checkBtn.disabled = true;
+  if (refreshBtn) refreshBtn.disabled = true;
+
+  if (!opts.silent) {
+    nowCards.innerHTML = "";
+    summary.innerHTML = "";
+    gridWrap.innerHTML = "";
+    nowCards.appendChild(renderLoading("Loading live room status…"));
+  }
+
+  try {
+    const url =
+      `${API_URL}?mode=availability` +
+      `&date=${encodeURIComponent(q.date)}` +
+      `&start=${encodeURIComponent(q.start)}` +
+      `&end=${encodeURIComponent(q.end)}` +
+      accessQueryParam() +
+      availTokenQueryParam();
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data?.authRequired) {
+      clearAvailToken();
+      updateAvailAuthUI(false);
+      nowCards.innerHTML = "";
+      summary.innerHTML = "";
+      gridWrap.innerHTML = "";
+      if (!opts.silent) promptAvailPassword();
+      return;
+    }
+
+    if (data?.error || !data?.rooms) {
+      throw new Error(data?.error || "Invalid availability payload");
+    }
+
+    availData = data;
+    renderAvailability(data);
+    scheduleAvailRefresh();
+  } catch (err) {
+    nowCards.innerHTML = "";
+    summary.innerHTML = "";
+    gridWrap.innerHTML = "";
+    summary.appendChild(
+      renderEmpty(
+        "Could not load availability",
+        "Set AVAILABILITY_PASSWORD in Script Properties, share Helios calendar, redeploy, then unlock again."
+      )
+    );
+  } finally {
+    if (checkBtn) checkBtn.disabled = false;
+    if (refreshBtn) refreshBtn.disabled = false;
+  }
+}
+
+function renderAvailability(data) {
+  const nowCards = document.getElementById("availNowCards");
+  const nowMeta = document.getElementById("availNowMeta");
+  const summary = document.getElementById("availSummary");
+  const gridWrap = document.getElementById("availGridWrap");
+  if (!nowCards || !summary || !gridWrap) return;
+
+  nowCards.innerHTML = "";
+  summary.innerHTML = "";
+  gridWrap.innerHTML = "";
+
+  if (nowMeta) {
+    nowMeta.textContent = `As of ${data.now} · tap a room for today’s calendar`;
+  }
+
+  (data.rooms || []).forEach(room => {
+    nowCards.appendChild(createAvailNowCard(room, data));
+  });
+
+  const windowLabel = document.createElement("p");
+  windowLabel.className = "availWindowLabel";
+  windowLabel.textContent = `${data.date} · ${data.start}–${data.end}`;
+  summary.appendChild(windowLabel);
+
+  const list = document.createElement("div");
+  list.className = "availRoomList";
+
+  (data.rooms || []).forEach(room => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `availRoomRow is-${room.status || "available"}`;
+    row.setAttribute("aria-label", `${room.label || room.id} ${room.status}`);
+
+    const top = document.createElement("div");
+    top.className = "availRoomTop";
+
+    const name = document.createElement("span");
+    name.className = "availRoomName";
+    name.textContent = room.label || room.id;
+
+    const badge = document.createElement("span");
+    badge.className = "availStatusBadge";
+    badge.textContent = room.status === "busy" ? "Busy" : "Free";
+
+    top.appendChild(name);
+    top.appendChild(badge);
+    row.appendChild(top);
+
+    const detail = document.createElement("p");
+    detail.className = "availRoomDetail";
+    if (room.status === "busy" && Array.isArray(room.events) && room.events.length) {
+      const first = room.events[0];
+      const time = `${first.start || ""}–${first.end || ""}`.replace(/^–|–$/g, "");
+      detail.textContent =
+        room.events.length === 1
+          ? `${time || "Busy"} · ${first.title || "View schedule"}`
+          : `${room.events.length} bookings in this window · View schedule`;
+    } else {
+      detail.textContent = "Free for the selected time · View schedule";
+    }
+    row.appendChild(detail);
+
+    row.addEventListener("click", () => openRoomDayCalendar(room.id, data));
+    list.appendChild(row);
+  });
+
+  summary.appendChild(list);
+  renderAvailOverviewGrid(data, gridWrap);
+}
+
+function createAvailNowCard(room, data) {
+  const now = room.now;
+  const status = now?.status || "available";
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = `availNowCard is-${status === "busy" ? "busy" : "available"}`;
+  card.setAttribute("role", "listitem");
+
+  const name = document.createElement("p");
+  name.className = "availNowName";
+  name.textContent = room.label || room.id;
+
+  const state = document.createElement("p");
+  state.className = "availNowState";
+  state.textContent = status === "busy" ? "BUSY" : "FREE";
+
+  const summary = document.createElement("p");
+  summary.className = "availNowSummary";
+  summary.textContent = now?.summary || "Free for the rest of today";
+
+  card.appendChild(name);
+  card.appendChild(state);
+  card.appendChild(summary);
+
+  if (status === "busy" && now?.eventTitle) {
+    const ev = document.createElement("p");
+    ev.className = "availNowEvent";
+    ev.textContent = now.eventTitle;
+    card.appendChild(ev);
+  }
+
+  card.addEventListener("click", () => openRoomDayCalendar(room.id, data, { useToday: true }));
+  return card;
+}
+
+function renderAvailOverviewGrid(data, gridWrap) {
+  const slots = data.slots || [];
+  const grid = data.grid || {};
+  const gridMeta = data.gridMeta || {};
+  const roomIds = (data.rooms || []).map(r => r.id);
+  if (!slots.length || !roomIds.length) return;
+
+  const scroller = document.createElement("div");
+  scroller.className = "availGridScroll";
+
+  const table = document.createElement("div");
+  table.className = "availGrid";
+  table.style.setProperty("--avail-cols", String(slots.length));
+
+  const head = document.createElement("div");
+  head.className = "availGridHead";
+  const corner = document.createElement("div");
+  corner.className = "availGridCorner";
+  corner.textContent = "Room";
+  head.appendChild(corner);
+  slots.forEach(slot => {
+    const cell = document.createElement("div");
+    cell.className = "availGridTime";
+    cell.title = slot;
+    cell.textContent = slot.endsWith(":00") ? String(parseInt(slot, 10)) : "";
+    head.appendChild(cell);
+  });
+  table.appendChild(head);
+
+  roomIds.forEach(id => {
+    const row = document.createElement("div");
+    row.className = "availGridRow";
+
+    const label = document.createElement("button");
+    label.type = "button";
+    label.className = "availGridRoom";
+    const room = (data.rooms || []).find(r => r.id === id);
+    label.textContent = room?.label || id;
+    label.addEventListener("click", () => openRoomDayCalendar(id, data));
+    row.appendChild(label);
+
+    const busyFlags = grid[id] || [];
+    const metaRow = gridMeta[id] || [];
+    slots.forEach((_, idx) => {
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "availGridCell";
+      const busy = !!busyFlags[idx];
+      cell.classList.toggle("is-busy", busy);
+      cell.classList.toggle("is-free", !busy);
+      const meta = metaRow[idx];
+      const slotLabel = slots[idx];
+      if (busy && meta) {
+        cell.title = `${meta.start}–${meta.end} · ${meta.title}`;
+        cell.setAttribute("aria-label", `${id} busy at ${slotLabel}: ${meta.title}`);
+      } else {
+        cell.title = busy ? `${id} busy at ${slotLabel}` : `${id} free at ${slotLabel}`;
+        cell.setAttribute("aria-label", cell.title);
+      }
+      cell.addEventListener("click", () => openRoomDayCalendar(id, data));
+      row.appendChild(cell);
+    });
+
+    table.appendChild(row);
+  });
+
+  scroller.appendChild(table);
+  gridWrap.appendChild(scroller);
+}
+
+function hhmmToMinutes(hhmm) {
+  const parts = String(hhmm || "").split(":");
+  return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+}
+
+function layoutRoomDayEvents(events) {
+  const sorted = (events || [])
+    .map(event => ({
+      ...event,
+      startMin: Math.max(hhmmToMinutes(event.start), AVAIL_GRID_START_MIN),
+      endMin: Math.min(hhmmToMinutes(event.end), AVAIL_GRID_END_MIN)
+    }))
+    .filter(event => event.endMin > event.startMin)
+    .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+
+  const groups = [];
+  let group = null;
+
+  sorted.forEach(event => {
+    if (!group || event.startMin >= group.endMin) {
+      group = { endMin: event.endMin, events: [event] };
+      groups.push(group);
+      return;
+    }
+
+    group.events.push(event);
+    group.endMin = Math.max(group.endMin, event.endMin);
+  });
+
+  return groups.flatMap(({ events: groupEvents }) => {
+    const active = [];
+    let columnCount = 1;
+
+    groupEvents.forEach(event => {
+      for (let i = active.length - 1; i >= 0; i -= 1) {
+        if (active[i].endMin <= event.startMin) active.splice(i, 1);
+      }
+
+      const usedColumns = new Set(active.map(item => item.column));
+      let column = 0;
+      while (usedColumns.has(column)) column += 1;
+
+      event.column = column;
+      active.push(event);
+      columnCount = Math.max(columnCount, column + 1);
+    });
+
+    return groupEvents.map(event => ({ ...event, columnCount }));
+  });
+}
+
+function openRoomDayCalendar(roomId, data, opts = {}) {
+  const room = (data.rooms || []).find(r => r.id === roomId);
+  if (!room) return;
+
+  const useToday = !!opts.useToday;
+  const viewDate = useToday ? data.today || data.date : data.date;
+  const viewEvents = useToday
+    ? Array.isArray(room.todayEvents)
+      ? room.todayEvents
+      : room.dayEvents || []
+    : room.dayEvents || [];
+  const showNowLine = useToday || !!data.isToday;
+
+  document.querySelectorAll(".modalOverlay[data-room-cal]").forEach(el => el.remove());
+
+  const overlay = document.createElement("div");
+  overlay.className = "modalOverlay";
+  overlay.setAttribute("data-room-cal", "1");
+
+  const modal = document.createElement("div");
+  modal.className = "modal availDayModal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+
+  const header = document.createElement("div");
+  header.className = "modalHeader";
+  const titleEl = document.createElement("p");
+  titleEl.className = "modalTitle";
+  titleEl.textContent = room.label || room.id;
+  const subEl = document.createElement("p");
+  subEl.className = "modalSub";
+  subEl.textContent = `${viewDate} · ${data.gridStart || "09:00"}–${data.gridEnd || "21:00"}`;
+  header.appendChild(titleEl);
+  header.appendChild(subEl);
+
+  const body = document.createElement("div");
+  body.className = "modalBody availDayBody";
+  body.appendChild(
+    buildRoomDayTimeline(
+      { ...room, dayEvents: viewEvents },
+      { ...data, date: viewDate, isToday: showNowLine }
+    )
+  );
+
+  const actions = document.createElement("div");
+  actions.className = "modalActions";
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "btnSecondary";
+  closeBtn.textContent = "Close";
+  closeBtn.addEventListener("click", () => overlay.remove());
+  actions.appendChild(closeBtn);
+
+  modal.appendChild(header);
+  modal.appendChild(body);
+  modal.appendChild(actions);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay) overlay.remove();
+  });
+}
+
+function buildRoomDayTimeline(room, data) {
+  const wrap = document.createElement("div");
+  wrap.className = "availDayTimeline";
+
+  const totalMins = AVAIL_GRID_END_MIN - AVAIL_GRID_START_MIN;
+  const height = Math.round(totalMins * AVAIL_PX_PER_MIN);
+  wrap.style.height = `${height}px`;
+
+  const hours = document.createElement("div");
+  hours.className = "availDayHours";
+  for (let t = AVAIL_GRID_START_MIN; t < AVAIL_GRID_END_MIN; t += 60) {
+    const label = document.createElement("div");
+    label.className = "availDayHour";
+    label.style.top = `${(t - AVAIL_GRID_START_MIN) * AVAIL_PX_PER_MIN}px`;
+    const h = Math.floor(t / 60);
+    label.textContent = `${h}:00`;
+    hours.appendChild(label);
+
+    const line = document.createElement("div");
+    line.className = "availDayHourLine";
+    line.style.top = `${(t - AVAIL_GRID_START_MIN) * AVAIL_PX_PER_MIN}px`;
+    wrap.appendChild(line);
+  }
+  wrap.appendChild(hours);
+
+  const track = document.createElement("div");
+  track.className = "availDayTrack";
+
+  const events = layoutRoomDayEvents(
+    Array.isArray(room.dayEvents) ? room.dayEvents : []
+  );
+  if (!events.length) {
+    const empty = document.createElement("p");
+    empty.className = "availDayEmpty";
+    empty.textContent = "No bookings on this day";
+    track.appendChild(empty);
+  } else {
+    events.forEach(ev => {
+      const block = document.createElement("button");
+      block.type = "button";
+      block.className = "availDayEvent";
+      const durationPx = (ev.endMin - ev.startMin) * AVAIL_PX_PER_MIN;
+      block.style.top = `${(ev.startMin - AVAIL_GRID_START_MIN) * AVAIL_PX_PER_MIN}px`;
+      block.style.height = `${Math.max(22, durationPx)}px`;
+      block.style.setProperty("--event-col", String(ev.column));
+      block.style.setProperty("--event-cols", String(ev.columnCount));
+      block.classList.toggle("is-compact", durationPx < 48);
+
+      const time = document.createElement("span");
+      time.className = "availDayEventTime";
+      time.textContent = `${ev.start}–${ev.end}`;
+
+      const title = document.createElement("span");
+      title.className = "availDayEventTitle";
+      title.textContent = ev.title || "Busy";
+
+      block.appendChild(time);
+      block.appendChild(title);
+      block.title = `${ev.start}–${ev.end} · ${ev.title || "Busy"}`;
+      block.addEventListener("click", e => {
+        e.stopPropagation();
+        showAvailEventDetails(room, ev, data.date);
+      });
+      track.appendChild(block);
+    });
+  }
+
+  wrap.appendChild(track);
+
+  if (data.isToday && data.now) {
+    const nowMin = hhmmToMinutes(data.now);
+    if (nowMin >= AVAIL_GRID_START_MIN && nowMin <= AVAIL_GRID_END_MIN) {
+      const nowLine = document.createElement("div");
+      nowLine.className = "availDayNowLine";
+      nowLine.style.top = `${(nowMin - AVAIL_GRID_START_MIN) * AVAIL_PX_PER_MIN}px`;
+      nowLine.setAttribute("aria-hidden", "true");
+      wrap.appendChild(nowLine);
+    }
+  }
+
+  return wrap;
+}
+
+function showAvailEventDetails(room, ev, dateStr) {
+  document.querySelectorAll(".modalOverlay[data-event-detail]").forEach(el => el.remove());
+
+  const overlay = document.createElement("div");
+  overlay.className = "modalOverlay";
+  overlay.setAttribute("data-event-detail", "1");
+  overlay.style.zIndex = "60";
+
+  const modal = document.createElement("div");
+  modal.className = "modal";
+
+  const header = document.createElement("div");
+  header.className = "modalHeader";
+  const titleEl = document.createElement("p");
+  titleEl.className = "modalTitle";
+  titleEl.textContent = ev.title || "Busy";
+  const subEl = document.createElement("p");
+  subEl.className = "modalSub";
+  subEl.textContent = `${room.label || room.id} · ${dateStr}`;
+  header.appendChild(titleEl);
+  header.appendChild(subEl);
+
+  const body = document.createElement("div");
+  body.className = "modalBody";
+  const kv = document.createElement("div");
+  kv.className = "kv";
+  kv.appendChild(kvItem("Time", `${ev.start || "?"} – ${ev.end || "?"}`));
+  kv.appendChild(kvItem("Room", room.label || room.id));
+  body.appendChild(kv);
+
+  const actions = document.createElement("div");
+  actions.className = "modalActions";
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "btnSecondary";
+  closeBtn.textContent = "Close";
+  closeBtn.addEventListener("click", () => overlay.remove());
+  actions.appendChild(closeBtn);
+
+  modal.appendChild(header);
+  modal.appendChild(body);
+  modal.appendChild(actions);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay) overlay.remove();
+  });
+}
+
 initModeSwitch();
 initDayNav();
 applyAccessMode();
+ensureAvailControlsReady();
+updateAvailAuthUI(!!getAvailToken());
