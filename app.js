@@ -1727,11 +1727,18 @@ function buildSlotConflictMap(events, slots) {
   slots.forEach((slot, idx) => {
     const slotStart = hhmmToMinutes(slot);
     const slotEnd = slotStart + 30;
-    let hits = 0;
-    list.forEach(ev => {
-      if (eventsOverlapRange(ev.start, ev.end, slotStart, slotEnd)) hits += 1;
-    });
-    map[idx] = hits > 1;
+    // Events that touch this 30-min bucket
+    const hits = list.filter(ev => eventsOverlapRange(ev.start, ev.end, slotStart, slotEnd));
+    // Red only if two of those bookings actually overlap each other
+    // (back-to-back lessons sharing a bucket must stay navy, not red).
+    for (let i = 0; i < hits.length; i += 1) {
+      for (let j = i + 1; j < hits.length; j += 1) {
+        if (eventsOverlapRange(hits[i].start, hits[i].end, hits[j].start, hits[j].end)) {
+          map[idx] = true;
+          return;
+        }
+      }
+    }
   });
   return map;
 }

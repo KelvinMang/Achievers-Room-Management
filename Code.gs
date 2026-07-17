@@ -489,20 +489,37 @@ function buildAvailability(params) {
       return false;
     });
 
-    (roomEvents[id] || []).forEach(function (ev) {
+    var dayList = roomEvents[id] || [];
+    dayList.forEach(function (ev) {
       slots.forEach(function (slot, idx) {
         var slotStart = parseDateTimeInTz(dateStr, slot);
         var slotEnd = new Date(slotStart.getTime() + AVAIL_SLOT_MINUTES * 60 * 1000);
         if (datesOverlap(ev.start, ev.end, slotStart, slotEnd)) {
-          if (grid[id][idx]) {
-            gridConflict[id][idx] = true;
-          }
           grid[id][idx] = true;
           if (!gridMeta[id][idx]) {
             gridMeta[id][idx] = serializeAvailEvent(ev);
           }
         }
       });
+    });
+
+    // Conflict only when two bookings truly overlap in time within the slot —
+    // not when back-to-back lessons merely share the same 30-min bucket.
+    slots.forEach(function (slot, idx) {
+      var slotStart = parseDateTimeInTz(dateStr, slot);
+      var slotEnd = new Date(slotStart.getTime() + AVAIL_SLOT_MINUTES * 60 * 1000);
+      var hits = [];
+      dayList.forEach(function (ev) {
+        if (datesOverlap(ev.start, ev.end, slotStart, slotEnd)) hits.push(ev);
+      });
+      for (var i = 0; i < hits.length; i++) {
+        for (var j = i + 1; j < hits.length; j++) {
+          if (datesOverlap(hits[i].start, hits[i].end, hits[j].start, hits[j].end)) {
+            gridConflict[id][idx] = true;
+            return;
+          }
+        }
+      }
     });
   });
 
