@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbxGvD-1bsGiWGlKFXMQ0pcXdPrp1mkYlYATh95xFs-cz2PSGrvuoLHK8d8Y19wWD8u95g/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwtl8JNWh19u6ogcHvuF8r7NzeVNcWP0otfqDb-96HCxyqQKCP3O1SVrSU9jkgAOZ9qFQ/exec";
 /** Must match keys in Code.gs. Change both sides when rotating. */
 const STAFF_KEY = "achievers-wc-staff-2026";
 const TUTOR_KEY = "achievers-tutor";
@@ -1504,6 +1504,16 @@ async function loadAvailability(opts = {}) {
     }
 
     availData = data;
+    // After create, Calendar can lag — keep the local booking painted.
+    if (opts.ensureCreated) {
+      const room = (data.rooms || []).find(r => r.id === opts.ensureCreated.roomId);
+      const serverHas = roomHasCreatedEvent(room, opts.ensureCreated);
+      if (!serverHas) {
+        applyCreatedAvailabilityEvent(opts.ensureCreated);
+        data = availData || data;
+      }
+      data._createdEventSynced = serverHas;
+    }
     renderAvailability(data, { updateList, updateOverview, query: q });
     scheduleAvailRefresh();
     return data;
@@ -1689,11 +1699,16 @@ function eventsOverlapRange(aStart, aEnd, bStart, bEnd) {
 function roomHasConflicts(room, opts = {}) {
   if (!room) return false;
   if (opts.useToday) {
-    if (typeof room.todayHasConflict === "boolean") return room.todayHasConflict;
-    return countOverlappingEventPairs(room.todayEvents || room.dayEvents || []) > 0;
+    const todayEvents = room.todayEvents || room.dayEvents;
+    if (Array.isArray(todayEvents)) {
+      return countOverlappingEventPairs(todayEvents) > 0;
+    }
+    return !!room.todayHasConflict;
   }
-  if (typeof room.hasConflict === "boolean") return room.hasConflict;
-  return countOverlappingEventPairs(room.dayEvents || []) > 0;
+  if (Array.isArray(room.dayEvents)) {
+    return countOverlappingEventPairs(room.dayEvents) > 0;
+  }
+  return !!room.hasConflict;
 }
 
 function countOverlappingEventPairs(events) {
@@ -1715,25 +1730,65 @@ function countOverlappingEventPairs(events) {
   return count;
 }
 
+function normalizeAvailEventList(events) {
+  return (events || [])
+    .map(ev => ({
+      title: ev.title || "Busy",
+      start: ev.start,
+      end: ev.end,
+      source: ev.source,
+      startMin: hhmmToMinutes(ev.start),
+      endMin: hhmmToMinutes(ev.end)
+    }))
+    .filter(ev => Number.isFinite(ev.startMin) && Number.isFinite(ev.endMin) && ev.endMin > ev.startMin);
+}
+
+function buildSlotBusyMap(events, slots) {
+  const map = slots.map(() => false);
+  const list = normalizeAvailEventList(events);
+
+  slots.forEach((slot, idx) => {
+    const slotStart = hhmmToMinutes(slot);
+    const slotEnd = slotStart + 30;
+    map[idx] = list.some(ev => eventsOverlapRange(ev.startMin, ev.endMin, slotStart, slotEnd));
+  });
+  return map;
+}
+
+function buildSlotMetaMap(events, slots) {
+  const map = slots.map(() => null);
+  const list = normalizeAvailEventList(events);
+
+  slots.forEach((slot, idx) => {
+    const slotStart = hhmmToMinutes(slot);
+    const slotEnd = slotStart + 30;
+    const hit = list.find(ev => eventsOverlapRange(ev.startMin, ev.endMin, slotStart, slotEnd));
+    if (hit) {
+      map[idx] = {
+        title: hit.title,
+        start: hit.start,
+        end: hit.end,
+        source: hit.source
+      };
+    }
+  });
+  return map;
+}
+
 function buildSlotConflictMap(events, slots) {
   const map = slots.map(() => false);
-  const list = (events || [])
-    .map(ev => ({
-      start: hhmmToMinutes(ev.start),
-      end: hhmmToMinutes(ev.end)
-    }))
-    .filter(ev => ev.end > ev.start);
+  const list = normalizeAvailEventList(events);
 
   slots.forEach((slot, idx) => {
     const slotStart = hhmmToMinutes(slot);
     const slotEnd = slotStart + 30;
     // Events that touch this 30-min bucket
-    const hits = list.filter(ev => eventsOverlapRange(ev.start, ev.end, slotStart, slotEnd));
+    const hits = list.filter(ev => eventsOverlapRange(ev.startMin, ev.endMin, slotStart, slotEnd));
     // Red only if two of those bookings actually overlap each other
     // (back-to-back lessons sharing a bucket must stay navy, not red).
     for (let i = 0; i < hits.length; i += 1) {
       for (let j = i + 1; j < hits.length; j += 1) {
-        if (eventsOverlapRange(hits[i].start, hits[i].end, hits[j].start, hits[j].end)) {
+        if (eventsOverlapRange(hits[i].startMin, hits[i].endMin, hits[j].startMin, hits[j].endMin)) {
           map[idx] = true;
           return;
         }
@@ -1741,6 +1796,170 @@ function buildSlotConflictMap(events, slots) {
     }
   });
   return map;
+}
+
+function eventKeyForDedupe(ev) {
+  // Time window is enough to collapse optimistic + Calendar copies of the same booking.
+  return `${ev.start || ""}|${ev.end || ""}`;
+}
+
+function computeClientNowStatus(dayEvents, nowHhmm) {
+  const nowMin = hhmmToMinutes(nowHhmm);
+  if (!Number.isFinite(nowMin)) {
+    return {
+      status: "available",
+      until: null,
+      summary: "Free for the rest of today",
+      eventTitle: "",
+      hasConflict: false
+    };
+  }
+
+  const list = normalizeAvailEventList(dayEvents).sort((a, b) => a.startMin - b.startMin);
+  const active = list.filter(ev => ev.startMin <= nowMin && nowMin < ev.endMin);
+  if (active.length) {
+    const untilMin = Math.max(...active.map(ev => ev.endMin));
+    const until = `${String(Math.floor(untilMin / 60)).padStart(2, "0")}:${String(untilMin % 60).padStart(2, "0")}`;
+    return {
+      status: "busy",
+      until,
+      summary: `Busy until ${until}`,
+      eventTitle: active[0].title || "Busy",
+      hasConflict: active.length > 1 || countOverlappingEventPairs(list) > 0
+    };
+  }
+
+  const next = list.find(ev => ev.startMin > nowMin);
+  if (next) {
+    return {
+      status: "available",
+      until: next.start,
+      summary: `Free until ${next.start}`,
+      eventTitle: "",
+      hasConflict: false
+    };
+  }
+
+  return {
+    status: "available",
+    until: null,
+    summary: "Free for the rest of today",
+    eventTitle: "",
+    hasConflict: false
+  };
+}
+
+function mergeAvailEventIntoRoom(room, event, { isToday, nowHhmm } = {}) {
+  if (!room || !event) return room;
+
+  const next = {
+    ...room,
+    dayEvents: [...(room.dayEvents || [])],
+    todayEvents: [...(room.todayEvents || [])],
+    events: [...(room.events || [])]
+  };
+
+  const key = eventKeyForDedupe(event);
+  const upsert = list => {
+    const filtered = list.filter(ev => eventKeyForDedupe(ev) !== key);
+    filtered.push({
+      title: event.title,
+      start: event.start,
+      end: event.end,
+      source: event.source
+    });
+    filtered.sort((a, b) => hhmmToMinutes(a.start) - hhmmToMinutes(b.start));
+    return filtered;
+  };
+
+  next.dayEvents = upsert(next.dayEvents);
+  if (isToday) next.todayEvents = upsert(next.todayEvents);
+  next.events = upsert(next.events);
+  next.status = next.events.length ? "busy" : "available";
+  next.hasConflict = countOverlappingEventPairs(next.dayEvents) > 0;
+  if (isToday) {
+    next.todayHasConflict = countOverlappingEventPairs(next.todayEvents) > 0;
+    if (nowHhmm) {
+      next.now = computeClientNowStatus(next.todayEvents.length ? next.todayEvents : next.dayEvents, nowHhmm);
+    }
+  }
+  return next;
+}
+
+function roomHasCreatedEvent(room, created) {
+  if (!room || !created) return false;
+  const key = eventKeyForDedupe({
+    title: created.title,
+    start: created.start,
+    end: created.end
+  });
+  return (room.dayEvents || []).some(ev => eventKeyForDedupe(ev) === key);
+}
+
+function applyCreatedAvailabilityEvent(created) {
+  if (!availData || !created?.roomId) return null;
+
+  // Only patch the day currently shown — otherwise wait for a dated reload.
+  if (created.date && availData.date && created.date !== availData.date) {
+    return availData;
+  }
+
+  const roomId = created.roomId;
+  const event = {
+    title: created.title,
+    start: created.start,
+    end: created.end,
+    source: Array.isArray(created.created) && created.created[0]?.calendar
+      ? created.created[0].calendar
+      : undefined
+  };
+  const isToday = availData.date === availData.today || created.date === availData.today;
+
+  const rooms = (availData.rooms || []).map(room =>
+    room.id === roomId
+      ? mergeAvailEventIntoRoom(room, event, { isToday, nowHhmm: availData.now })
+      : room
+  );
+
+  // Keep grid arrays in sync so Free-now / overview stay consistent
+  // even before Calendar API returns the new event.
+  const slots = availData.slots || [];
+  const room = rooms.find(r => r.id === roomId);
+  const grid = { ...(availData.grid || {}) };
+  const gridMeta = { ...(availData.gridMeta || {}) };
+  const gridConflict = { ...(availData.gridConflict || {}) };
+  if (room && slots.length) {
+    grid[roomId] = buildSlotBusyMap(room.dayEvents, slots);
+    gridMeta[roomId] = buildSlotMetaMap(room.dayEvents, slots);
+    gridConflict[roomId] = buildSlotConflictMap(room.dayEvents, slots);
+  }
+
+  availData = {
+    ...availData,
+    rooms,
+    grid,
+    gridMeta,
+    gridConflict
+  };
+  return availData;
+}
+
+async function refreshAvailabilityAfterCreate(created) {
+  // Calendar can lag briefly after createEvent — retry a few times and
+  // keep the optimistic booking painted until the API includes it.
+  const dateStr = created?.date;
+  const delays = [400, 1200, 2500];
+  let latest = null;
+  for (const delay of delays) {
+    await new Promise(resolve => setTimeout(resolve, delay));
+    latest = await loadAvailability({
+      silent: true,
+      date: dateStr,
+      ensureCreated: created
+    });
+    if (latest?._createdEventSynced) return latest;
+  }
+  return availData;
 }
 
 function renderAvailOverviewGrid(data, gridWrap) {
@@ -1805,11 +2024,17 @@ function renderAvailOverviewGrid(data, gridWrap) {
       label.addEventListener("click", () => openRoomDayCalendar(id, data));
       row.appendChild(label);
 
-      const busyFlags = grid[id] || [];
-      const metaRow = gridMeta[id] || [];
-      const conflictFlags =
-        gridConflict[id] ||
-        buildSlotConflictMap(room.dayEvents || [], slots);
+      // Paint from dayEvents so optimistic creates show immediately,
+      // and adjacent lessons stay navy (not red) even if API flags lag.
+      const busyFlags = Array.isArray(room.dayEvents)
+        ? buildSlotBusyMap(room.dayEvents, slots)
+        : (grid[id] || []);
+      const metaRow = Array.isArray(room.dayEvents)
+        ? buildSlotMetaMap(room.dayEvents, slots)
+        : (gridMeta[id] || []);
+      const conflictFlags = Array.isArray(room.dayEvents)
+        ? buildSlotConflictMap(room.dayEvents, slots)
+        : (gridConflict[id] || []);
       slots.forEach((_, idx) => {
         const cell = document.createElement("button");
         cell.type = "button";
@@ -2481,11 +2706,21 @@ function openAvailCreateEventModal(opts) {
         throw new Error(data?.error || "Could not create event");
       }
       close();
-      // Reload the same calendar day we booked (not "today")
-      const fresh = await loadAvailability({ silent: true, date: eventDate });
+      // Show the booking immediately, then reconcile with Calendar in the background.
+      applyCreatedAvailabilityEvent(data);
+      if (availData) {
+        renderAvailability(availData);
+        openRoomDayCalendar(room.id, availData, { date: eventDate });
+      }
+      const fresh = await refreshAvailabilityAfterCreate(data);
       const payload = fresh || availData;
       if (payload) {
-        openRoomDayCalendar(room.id, payload, { date: eventDate });
+        const open = document.querySelector(".modalOverlay[data-room-cal]");
+        if (open) {
+          openRoomDayCalendar(room.id, payload, { date: eventDate });
+        } else {
+          renderAvailability(payload);
+        }
       }
     } catch (err) {
       if (errEl) {

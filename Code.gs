@@ -514,7 +514,7 @@ function buildAvailability(params) {
       });
       for (var i = 0; i < hits.length; i++) {
         for (var j = i + 1; j < hits.length; j++) {
-          if (datesOverlap(hits[i].start, hits[i].end, hits[j].start, hits[j].end)) {
+          if (availEventsOverlapByMinute(hits[i], hits[j])) {
             gridConflict[id][idx] = true;
             return;
           }
@@ -623,12 +623,33 @@ function roomEventsHaveConflict(events) {
   var list = events || [];
   for (var i = 0; i < list.length; i++) {
     for (var j = i + 1; j < list.length; j++) {
-      if (datesOverlap(list[i].start, list[i].end, list[j].start, list[j].end)) {
+      if (availEventsOverlapByMinute(list[i], list[j])) {
         return true;
       }
     }
   }
   return false;
+}
+
+function availEventsOverlapByMinute(a, b) {
+  if (!a || !b) return false;
+
+  var aStart = timeToMinutes(
+    a.startLabel || Utilities.formatDate(a.start, SCRIPT_TZ, "HH:mm")
+  );
+  var aEnd = timeToMinutes(
+    a.endLabel || Utilities.formatDate(a.end, SCRIPT_TZ, "HH:mm")
+  );
+  var bStart = timeToMinutes(
+    b.startLabel || Utilities.formatDate(b.start, SCRIPT_TZ, "HH:mm")
+  );
+  var bEnd = timeToMinutes(
+    b.endLabel || Utilities.formatDate(b.end, SCRIPT_TZ, "HH:mm")
+  );
+
+  // Strict comparison keeps adjacent bookings conflict-free:
+  // 16:15–17:15 followed by 17:15–18:45 is not an overlap.
+  return aStart < bEnd && aEnd > bStart;
 }
 
 function countEventsAt(events, instant) {
