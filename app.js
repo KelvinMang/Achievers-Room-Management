@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbw08QoTamHSdUpy8qoBFUqCv0F5gz9LspimwAqqzDi3dQ43FeHJtDfj6kOw6oasYgCowQ/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxGvD-1bsGiWGlKFXMQ0pcXdPrp1mkYlYATh95xFs-cz2PSGrvuoLHK8d8Y19wWD8u95g/exec";
 /** Must match keys in Code.gs. Change both sides when rotating. */
 const STAFF_KEY = "achievers-wc-staff-2026";
 const TUTOR_KEY = "achievers-tutor";
