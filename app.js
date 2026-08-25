@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbwtl8JNWh19u6ogcHvuF8r7NzeVNcWP0otfqDb-96HCxyqQKCP3O1SVrSU9jkgAOZ9qFQ/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzMc2mM31g_TS_TNgAkl03zJ6a11I64a4czw6D04pqfD3hywFWpbbzLky0-WP2HacO1yg/exec";
 /** Must match keys in Code.gs. Change both sides when rotating. */
 const STAFF_KEY = "achievers-wc-staff-2026";
 const TUTOR_KEY = "achievers-tutor";
@@ -14,22 +14,196 @@ const AVAIL_GRID_START_MIN = 9 * 60;
 const AVAIL_GRID_END_MIN = 21 * 60;
 const AVAIL_PX_PER_MIN = 1.45;
 
-const HELP_PHONE = "+852 5727 1209";
-const HELP_ADDRESS = "Room 1012, 10/F, Tai Yau Building, 181 Johnston Road, Wan Chai";
+const HELP_PHONE_ACHIEVERS = "+852 5727 1209";
+const HELP_PHONE_HELIOS = "+852 9229 6725";
+
+const HELP_OFFICES = [
+  {
+    branch: "Wan Chai",
+    lines: [
+      "Room 1012, 10/F, Tai Yau Building, 181 Johnston Road",
+      "Room 1309, 13/F, Tai Yau Building, 181 Johnston Road"
+    ]
+  },
+  {
+    branch: "Prince Edward",
+    lines: ["Room 309, Summit Insurance Building, 789 Nathan Road"]
+  }
+];
+
+const HELP_CONTACTS = [
+  { org: "Achievers", phone: HELP_PHONE_ACHIEVERS },
+  { org: "Helios", phone: HELP_PHONE_HELIOS }
+];
 
 const STUDENT_HELP = {
   title: "Can't find your room?",
-  body: `Please visit the Room Management Desktop at ${HELP_ADDRESS} to check today’s floor board.`,
-  note: "Rooms can change occasionally — please double-check your room before class.",
-  contact: `Still stuck? Call ${HELP_PHONE}.`
+  body: "Helios and Achievers share the same classrooms. Visit a Room Management Desktop at either office to check today’s floor board.",
+  note: ""
 };
 
 const TUTOR_HELP = {
   title: "Can't find your lesson room?",
-  body: `Please visit the Room Management Desktop at ${HELP_ADDRESS} to check today’s floor board.`,
-  note: "Rooms can change occasionally — please double-check your room before class.",
-  contact: `Need help? Call ${HELP_PHONE}.`
+  body: "Helios and Achievers share the same classrooms. Visit a Room Management Desktop at either office to check today’s floor board.",
+  note: ""
 };
+
+const STAFF_HELP = {
+  title: "Office locations & who to call",
+  body: "Call Achievers or Helios depending on which company they belong to.",
+  note: "Rooms can change occasionally — please double-check the room before class."
+};
+
+const LANG_STORAGE_KEY = "achievers_student_lang";
+const LANG_ZH = "zh-Hant";
+const LANG_EN = "en";
+
+const I18N_EN = {
+  docTitle: "Student version · Helios & Achievers Lesson Finder",
+  appTitle: "Student Lesson Finder",
+  versionTitle: "Student version",
+  versionDetail: "This page searches student names only — not tutor names.",
+  subtitle: "Search your student name to find today’s room.",
+  nameLabel: "Enter student name",
+  namePlaceholder: "e.g. Peter Chan",
+  search: "Search",
+  refresh: "Refresh",
+  today: "Today",
+  tomorrow: "Tomorrow",
+  warnKicker: "Important",
+  warnTitle: "Rooms change occasionally",
+  warnBefore: "Please only check your room ",
+  warnStrong: "within 5 hours of your lesson",
+  warnAfter: " so you get the right room number. If you checked earlier, check again just before class.",
+  helpTitle: "Can't find your room?",
+  helpBody: "Helios and Achievers share the same classrooms. Visit a Room Management Desktop at either office to check today’s floor board.",
+  helpOffices: "Offices",
+  helpCall: "Call Achievers or Helios",
+  branchWc: "Wan Chai",
+  branchPe: "Prince Edward",
+  officeWc1: "Room 1012, 10/F, Tai Yau Building, 181 Johnston Road",
+  officeWc2: "Room 1309, 13/F, Tai Yau Building, 181 Johnston Road",
+  officePe: "Room 309, Summit Insurance Building, 789 Nathan Road",
+  enterName: "Enter your name",
+  enterNameSub: "Type your name and press Search. If a few people match, you’ll pick yours.",
+  nameTooShort: "Name too short",
+  nameTooShortSub: "Enter at least 3 letters of your name.",
+  noLessons: "No lessons {day}",
+  tryAnother: "Please try another name.",
+  tryAnotherOrDay: "Please try another name, or switch day.",
+  cancelled: "Cancelled",
+  selectName: "Select a name to continue.",
+  couldNotSearch: "Could not search",
+  errorLoading: "Error loading data",
+  tryAgain: "Please try again in a moment.",
+  whichPerson: "Which person do you mean?",
+  selectForLessons: "Select the correct name to show {day}'s lessons.",
+  cancel: "Cancel",
+  location: "Location",
+  room: "Room",
+  online: "Online",
+  onsite: "On-site",
+  wanChai: "Wan Chai",
+  princeEdward: "Prince Edward",
+  tbc: "TBC",
+  loading: "Loading...",
+  previousDay: "Previous day",
+  nextDay: "Next day"
+};
+
+const I18N_ZH = {
+  docTitle: "學生版 · Helios & Achievers 課堂查詢",
+  appTitle: "學生課堂查詢",
+  versionTitle: "學生版",
+  versionDetail: "此頁只可搜尋學生姓名，不能搜尋導師姓名。",
+  subtitle: "輸入學生姓名，查詢今日課室。",
+  nameLabel: "輸入學生姓名",
+  namePlaceholder: "例如 Peter Chan",
+  search: "搜尋",
+  refresh: "重新整理",
+  today: "今天",
+  tomorrow: "明天",
+  warnKicker: "重要提示",
+  warnTitle: "課室或會臨時更改",
+  warnBefore: "請只在",
+  warnStrong: "上課前 5 小時內",
+  warnAfter: "查詢課室，以確保課室編號正確。如你較早前已查過，上課前請再查一次。",
+  helpTitle: "找不到課室？",
+  helpBody: "Helios 與 Achievers 共用課室。請到任何一間辦公室的課室管理電腦查閱當日樓層表。",
+  helpOffices: "辦公室",
+  helpCall: "致電 Achievers 或 Helios",
+  branchWc: "灣仔",
+  branchPe: "太子",
+  officeWc1: "灣仔莊士敦道181號大有大廈10樓1012室",
+  officeWc2: "灣仔莊士敦道181號大有大廈13樓1309室",
+  officePe: "彌敦道789號始創保險大廈309室",
+  enterName: "請輸入姓名",
+  enterNameSub: "輸入學生姓名後按「搜尋」。如有多個相同姓名，請再選擇。",
+  nameTooShort: "姓名太短",
+  nameTooShortSub: "請輸入至少 3 個英文字母。",
+  noLessons: "{day}沒有課堂",
+  tryAnother: "請試另一個姓名。",
+  tryAnotherOrDay: "請試另一個姓名，或轉另一天。",
+  cancelled: "已取消",
+  selectName: "請選擇姓名以繼續。",
+  couldNotSearch: "未能搜尋",
+  errorLoading: "未能載入資料",
+  tryAgain: "請稍後再試。",
+  whichPerson: "你是指哪一位？",
+  selectForLessons: "請選擇正確姓名，以顯示{day}的課堂。",
+  cancel: "取消",
+  location: "地點",
+  room: "課室",
+  online: "網上",
+  onsite: "面授",
+  wanChai: "灣仔",
+  princeEdward: "太子",
+  tbc: "待定",
+  loading: "載入中…",
+  previousDay: "前一天",
+  nextDay: "後一天"
+};
+
+let studentLang = LANG_ZH;
+
+function isStudentUi() {
+  return !staffMode && !tutorMode;
+}
+
+function useZh() {
+  return isStudentUi() && studentLang === LANG_ZH;
+}
+
+function t(key) {
+  const pack = useZh() ? I18N_ZH : I18N_EN;
+  return pack[key] || I18N_EN[key] || key;
+}
+
+function tDay(key) {
+  const day = useZh()
+    ? selectedDay === "tomorrow" ? "明天" : "今天"
+    : selectedDay === "tomorrow" ? "tomorrow" : "today";
+  return t(key).replace("{day}", day);
+}
+
+function loadStudentLang() {
+  try {
+    const saved = localStorage.getItem(LANG_STORAGE_KEY);
+    if (saved === LANG_EN || saved === LANG_ZH) studentLang = saved;
+    else studentLang = LANG_ZH;
+  } catch (err) {
+    studentLang = LANG_ZH;
+  }
+}
+
+function saveStudentLang(lang) {
+  studentLang = lang === LANG_EN ? LANG_EN : LANG_ZH;
+  try {
+    localStorage.setItem(LANG_STORAGE_KEY, studentLang);
+  } catch (err) {
+    /* ignore */
+  }
+}
 
 let resultsResetTimerId = null;
 let boardRefreshTimerId = null;
@@ -57,6 +231,7 @@ function dayWord() {
 }
 
 function dayTitleWord() {
+  if (useZh()) return selectedDay === "tomorrow" ? "明天" : "今天";
   return selectedDay === "tomorrow" ? "Tomorrow" : "Today";
 }
 
@@ -68,7 +243,7 @@ function getDayDateObject(day) {
 }
 
 function formatDayDateLabel(day) {
-  return getDayDateObject(day).toLocaleDateString([], {
+  return getDayDateObject(day).toLocaleDateString(useZh() ? "zh-HK" : undefined, {
     weekday: "short",
     month: "short",
     day: "numeric"
@@ -94,10 +269,16 @@ function updateDayNavUI() {
   if (searchDate) searchDate.textContent = dateText;
   if (boardLabel) boardLabel.textContent = label;
   if (boardDate) boardDate.textContent = dateText;
-  if (boardTitle) boardTitle.textContent = `${label}’s rooms — Wan Chai`;
+  if (boardTitle) boardTitle.textContent = `${label}’s rooms — Helios & Achievers`;
 
-  if (prevSearch) prevSearch.disabled = isToday;
-  if (nextSearch) nextSearch.disabled = !isToday;
+  if (prevSearch) {
+    prevSearch.disabled = isToday;
+    prevSearch.setAttribute("aria-label", t("previousDay"));
+  }
+  if (nextSearch) {
+    nextSearch.disabled = !isToday;
+    nextSearch.setAttribute("aria-label", t("nextDay"));
+  }
   if (prevBoard) prevBoard.disabled = isToday;
   if (nextBoard) nextBoard.disabled = !isToday;
 }
@@ -186,44 +367,154 @@ function applyAccessMode() {
   tutorMode = access.tutor;
 
   const modeSwitch = document.getElementById("modeSwitch");
-  const staffBadge = document.getElementById("staffBadge");
+  const versionBanner = document.getElementById("versionBanner");
+  const versionTitle = document.getElementById("versionBannerTitle");
+  const versionDetail = document.getElementById("versionBannerDetail");
+  const appTitle = document.getElementById("appTitle") || document.querySelector(".app-header .title");
   const subtitle = document.getElementById("appSubtitle");
   const nameLabel = document.getElementById("nameLabel");
   const nameInput = document.getElementById("name");
-  const helpEl = document.getElementById("portalHelp");
+  const langSwitch = document.getElementById("langSwitch");
 
-  if (modeSwitch) modeSwitch.hidden = !staffMode;
-  if (staffBadge) {
-    staffBadge.hidden = !(staffMode || tutorMode);
-    staffBadge.textContent = staffMode
-      ? "Staff / kiosk mode"
-      : tutorMode
-        ? "Tutor mode"
-        : "";
-  }
-
-  updatePortalHelp();
+  const isStudent = !staffMode && !tutorMode;
+  if (modeSwitch) modeSwitch.hidden = tutorMode;
+  ["modeSearchBtn", "modeBoardBtn", "modeAvailBtn"].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.hidden = !staffMode;
+  });
+  document.body.classList.toggle("is-student", isStudent);
+  document.body.classList.toggle("is-tutor", tutorMode);
+  document.body.classList.toggle("is-staff", staffMode);
+  if (langSwitch) langSwitch.hidden = !isStudent;
 
   if (staffMode) {
-    if (subtitle) subtitle.textContent = "Staff mode — search, floor board, or room availability.";
+    document.documentElement.lang = "en";
+    document.title = "Staff · Helios & Achievers Lesson Finder";
+    if (appTitle) appTitle.textContent = "Lesson Finder";
+    if (versionTitle) versionTitle.textContent = "Staff version";
+    if (versionDetail) versionDetail.textContent = "Search a student or tutor, or open Floor board and Room availability.";
+    if (subtitle) subtitle.textContent = "Shared Helios & Achievers campus — search, board, or rooms.";
     if (nameLabel) nameLabel.textContent = "Student / Tutor name";
     if (nameInput) nameInput.placeholder = "Enter student or tutor name (e.g. Peter Chan)";
+    const searchBtn = document.getElementById("searchBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    if (searchBtn) searchBtn.textContent = "Search";
+    if (refreshBtn) refreshBtn.textContent = "Refresh";
+    applyRoomWarning(true);
   } else if (tutorMode) {
-    if (subtitle) subtitle.textContent = "Tutor mode — search your name to find today’s rooms.";
-    if (nameLabel) nameLabel.textContent = "Your tutor name";
-    if (nameInput) nameInput.placeholder = "e.g. Jay or Traf";
+    document.documentElement.lang = "en";
+    document.title = "Tutor version · Helios & Achievers Lesson Finder";
+    if (appTitle) appTitle.textContent = "Tutor Lesson Finder";
+    if (versionTitle) versionTitle.textContent = "Tutor version";
+    if (versionDetail) versionDetail.textContent = "This page searches tutor names only — not student names.";
+    if (subtitle) subtitle.textContent = "Search your tutor name to find today’s rooms.";
+    if (nameLabel) nameLabel.textContent = "Enter tutor name";
+    if (nameInput) nameInput.placeholder = "e.g. Kelvin Chan";
+    const searchBtn = document.getElementById("searchBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    if (searchBtn) searchBtn.textContent = "Search";
+    if (refreshBtn) refreshBtn.textContent = "Refresh";
+    applyRoomWarning(true);
     setMode("search");
   } else {
-    if (subtitle) subtitle.textContent = "Search your name to find your room (today or tomorrow).";
-    if (nameLabel) nameLabel.textContent = "Your name";
-    if (nameInput) nameInput.placeholder = "e.g. Jayden or Peter Chan";
+    applyStudentLanguage();
     setMode("search");
+  }
+  if (versionBanner) versionBanner.hidden = false;
+  const roomWarning = document.getElementById("roomWarning");
+  if (roomWarning) roomWarning.hidden = staffMode;
+
+  updatePortalHelp();
+  updateDayNavUI();
+  updateLangButtons();
+}
+
+function applyStudentLanguage() {
+  document.documentElement.lang = useZh() ? "zh-Hant" : "en";
+  document.title = t("docTitle");
+  const appTitle = document.getElementById("appTitle");
+  const subtitle = document.getElementById("appSubtitle");
+  const versionTitle = document.getElementById("versionBannerTitle");
+  const versionDetail = document.getElementById("versionBannerDetail");
+  const nameLabel = document.getElementById("nameLabel");
+  const nameInput = document.getElementById("name");
+  const searchBtn = document.getElementById("searchBtn");
+  const refreshBtn = document.getElementById("refreshBtn");
+
+  if (appTitle) appTitle.textContent = t("appTitle");
+  if (subtitle) subtitle.textContent = t("subtitle");
+  if (versionTitle) versionTitle.textContent = t("versionTitle");
+  if (versionDetail) versionDetail.textContent = t("versionDetail");
+  if (nameLabel) nameLabel.textContent = t("nameLabel");
+  if (nameInput) nameInput.placeholder = t("namePlaceholder");
+  if (searchBtn) searchBtn.textContent = t("search");
+  if (refreshBtn) refreshBtn.textContent = t("refresh");
+  applyRoomWarning(false);
+}
+
+function applyRoomWarning(forceEnglish) {
+  const warnKicker = document.getElementById("roomWarningKicker");
+  const warnTitle = document.getElementById("roomWarningTitle");
+  const warnBody = document.getElementById("roomWarningBody");
+  const pack = forceEnglish || !useZh() ? I18N_EN : I18N_ZH;
+  if (warnKicker) warnKicker.textContent = pack.warnKicker;
+  if (warnTitle) warnTitle.textContent = pack.warnTitle;
+  if (warnBody) {
+    warnBody.textContent = "";
+    warnBody.append(pack.warnBefore);
+    const strong = document.createElement("strong");
+    strong.textContent = pack.warnStrong;
+    warnBody.appendChild(strong);
+    warnBody.append(pack.warnAfter);
   }
 }
 
+function updateLangButtons() {
+  const zhBtn = document.getElementById("langZhBtn");
+  const enBtn = document.getElementById("langEnBtn");
+  zhBtn?.classList.toggle("is-active", studentLang === LANG_ZH);
+  enBtn?.classList.toggle("is-active", studentLang === LANG_EN);
+  zhBtn?.setAttribute("aria-pressed", String(studentLang === LANG_ZH));
+  enBtn?.setAttribute("aria-pressed", String(studentLang === LANG_EN));
+}
+
+function initLangSwitch() {
+  document.getElementById("langSwitch")?.addEventListener("click", e => {
+    const btn = e.target.closest("[data-lang]");
+    if (!btn || !isStudentUi()) return;
+    const next = btn.getAttribute("data-lang");
+    if (next !== LANG_EN && next !== LANG_ZH) return;
+    if (next === studentLang) return;
+    saveStudentLang(next);
+    applyStudentLanguage();
+    updateLangButtons();
+    updatePortalHelp();
+    updateDayNavUI();
+    const nameInput = document.getElementById("name");
+    const div = document.getElementById("results");
+    const searchBtn = document.getElementById("searchBtn");
+    const query = (lastSearchQuery || nameInput?.value || "").trim();
+    if (query && div && searchBtn && nameInput) {
+      runQuery(query, { nameInput, div, btn: searchBtn, role: lastSearchRole || "student" });
+    }
+  });
+}
+
 function currentHelpContent() {
-  if (staffMode) return null;
-  return tutorMode ? TUTOR_HELP : STUDENT_HELP;
+  if (staffMode) return STAFF_HELP;
+  if (tutorMode) return TUTOR_HELP;
+  return {
+    title: t("helpTitle"),
+    body: t("helpBody"),
+    note: ""
+  };
+}
+
+function appendHelpHeading(el, text) {
+  const h = document.createElement("p");
+  h.className = "helpNoteSection";
+  h.textContent = text;
+  el.appendChild(h);
 }
 
 function fillHelpCard(el, content) {
@@ -233,13 +524,60 @@ function fillHelpCard(el, content) {
   const title = document.createElement("p");
   title.className = "helpNoteTitle";
   title.textContent = content.title;
+  el.appendChild(title);
 
   const body = document.createElement("p");
   body.className = "helpNoteBody";
   body.textContent = content.body;
-
-  el.appendChild(title);
   el.appendChild(body);
+
+  const offices = useZh()
+    ? [
+        { branch: t("branchWc"), lines: [t("officeWc1"), t("officeWc2")] },
+        { branch: t("branchPe"), lines: [t("officePe")] }
+      ]
+    : HELP_OFFICES;
+
+  appendHelpHeading(el, isStudentUi() ? t("helpOffices") : "Offices");
+  offices.forEach(office => {
+    const block = document.createElement("div");
+    block.className = "helpNoteOffice";
+
+    const name = document.createElement("p");
+    name.className = "helpNoteOfficeName";
+    name.textContent = office.branch;
+    block.appendChild(name);
+
+    const list = document.createElement("ul");
+    list.className = "helpNoteOfficeList";
+    office.lines.forEach(line => {
+      const li = document.createElement("li");
+      li.textContent = line;
+      list.appendChild(li);
+    });
+    block.appendChild(list);
+    el.appendChild(block);
+  });
+
+  appendHelpHeading(el, isStudentUi() ? t("helpCall") : "Call Achievers or Helios");
+  const phones = document.createElement("ul");
+  phones.className = "helpNotePhones";
+  HELP_CONTACTS.forEach(item => {
+    const li = document.createElement("li");
+
+    const who = document.createElement("span");
+    who.className = "helpNotePhoneRole";
+    who.textContent = item.org;
+
+    const link = document.createElement("a");
+    link.href = `tel:${item.phone.replace(/\s+/g, "")}`;
+    link.textContent = item.phone;
+
+    li.appendChild(who);
+    li.appendChild(link);
+    phones.appendChild(li);
+  });
+  el.appendChild(phones);
 
   if (content.note) {
     const note = document.createElement("p");
@@ -247,22 +585,6 @@ function fillHelpCard(el, content) {
     note.textContent = content.note;
     el.appendChild(note);
   }
-
-  const contact = document.createElement("p");
-  contact.className = "helpNoteContact";
-  const match = String(content.contact || "").match(/^(.*?)(\+852[\d\s]+)(.*)$/);
-  if (match) {
-    contact.append(match[1]);
-    const link = document.createElement("a");
-    link.href = `tel:${HELP_PHONE.replace(/\s+/g, "")}`;
-    link.textContent = match[2].trim();
-    contact.appendChild(link);
-    contact.append(match[3] || "");
-  } else {
-    contact.textContent = content.contact || "";
-  }
-
-  el.appendChild(contact);
 }
 
 function updatePortalHelp() {
@@ -459,12 +781,12 @@ async function search() {
   if (!rawQuery) {
     div.appendChild(
       renderEmpty(
-        "Enter your name",
+        isStudentUi() ? t("enterName") : "Enter your name",
         staffMode
           ? "Type a student or tutor name and press Search."
           : tutorMode
             ? "Type your tutor name and press Search."
-            : "Type your name and press Search. If a few people match, you’ll pick yours."
+            : t("enterNameSub")
       )
     );
     return;
@@ -472,7 +794,7 @@ async function search() {
 
   if (!staffMode && !tutorMode && rawQuery.replace(/\s+/g, "").length < 3) {
     div.appendChild(
-      renderEmpty("Name too short", "Enter at least 3 letters of your name.")
+      renderEmpty(t("nameTooShort"), t("nameTooShortSub"))
     );
     return;
   }
@@ -510,7 +832,7 @@ async function search() {
 function formatTime(dateStr) {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString([], {
+  return d.toLocaleTimeString(useZh() ? "zh-HK" : undefined, {
     hour: "numeric",
     minute: "2-digit"
   });
@@ -554,7 +876,7 @@ function renderLoading(label) {
   wrap.className = "loading";
   wrap.innerHTML = `
     <span class="spinner" aria-hidden="true"></span>
-    <span>${label || "Loading..."}</span>
+    <span>${label || t("loading")}</span>
   `;
   return wrap;
 }
@@ -579,6 +901,14 @@ function renderEmpty(mainText, subText) {
   return wrap;
 }
 
+function displayLocation(raw) {
+  const loc = String(raw || "").trim();
+  if (!loc) return t("tbc");
+  if (/wan chai/i.test(loc)) return t("wanChai");
+  if (/prince edward/i.test(loc)) return t("princeEdward");
+  return loc;
+}
+
 function createEventCard(e) {
   const card = document.createElement("div");
   card.className = "card";
@@ -600,7 +930,7 @@ function createEventCard(e) {
   const end = formatTime(e.end);
   const time = document.createElement("div");
   time.className = "cardTime";
-  time.textContent = start && end ? `${start} - ${end}` : "TBC";
+  time.textContent = start && end ? `${start} - ${end}` : t("tbc");
 
   top.appendChild(title);
   top.appendChild(time);
@@ -610,21 +940,21 @@ function createEventCard(e) {
 
   const badge = document.createElement("span");
   badge.className = `badge ${isOnline ? "online" : "onsite"}`;
-  badge.innerHTML = `<span class="dot" aria-hidden="true"></span>${isOnline ? "Online" : "On-site"}`;
+  badge.innerHTML = `<span class="dot" aria-hidden="true"></span>${isOnline ? t("online") : t("onsite")}`;
   meta.appendChild(badge);
 
   const kv = document.createElement("div");
   kv.className = "kv";
 
-  const location = e.location || "TBC";
+  const location = displayLocation(e.location);
   const room = isOnline
-    ? "Online"
+    ? t("online")
     : e.roomFormatted && e.roomFormatted !== "TBC"
       ? e.roomFormatted
-      : e.room || "TBC";
+      : e.room || t("tbc");
 
-  kv.appendChild(kvItem("Location", location));
-  kv.appendChild(kvItem("Room", room));
+  kv.appendChild(kvItem(t("location"), location));
+  kv.appendChild(kvItem(t("room"), room));
 
   // Staff/tutor links may show the full calendar title.
   if ((staffMode || tutorMode) && e.title) {
@@ -679,8 +1009,12 @@ async function runQuery(query, { nameInput, div, btn, role }) {
       div.innerHTML = "";
       div.appendChild(
         renderEmpty(
-          /3 letters/i.test(data.error) ? "Name too short" : "Could not search",
-          data.error
+          /3 letters/i.test(data.error)
+            ? t("nameTooShort")
+            : isStudentUi()
+              ? t("couldNotSearch")
+              : "Could not search",
+          /3 letters/i.test(data.error) && isStudentUi() ? t("nameTooShortSub") : data.error
         )
       );
       showRefreshButton();
@@ -690,7 +1024,12 @@ async function runQuery(query, { nameInput, div, btn, role }) {
     if (Array.isArray(data)) {
       div.innerHTML = "";
       if (!data.length) {
-        div.appendChild(renderEmpty(`No lessons ${dayWord()}`, "Please try another name."));
+        div.appendChild(
+          renderEmpty(
+            isStudentUi() ? tDay("noLessons") : `No lessons ${dayWord()}`,
+            isStudentUi() ? t("tryAnother") : "Please try another name."
+          )
+        );
         scheduleResultsReset(div);
         showRefreshButton();
         return;
@@ -717,7 +1056,12 @@ async function runQuery(query, { nameInput, div, btn, role }) {
         () => {
           if (choicesModalEl) choicesModalEl.remove();
           div.innerHTML = "";
-          div.appendChild(renderEmpty("Cancelled", "Select a name to continue."));
+          div.appendChild(
+            renderEmpty(
+              isStudentUi() ? t("cancelled") : "Cancelled",
+              isStudentUi() ? t("selectName") : "Select a name to continue."
+            )
+          );
         }
       );
       return;
@@ -735,7 +1079,12 @@ async function runQuery(query, { nameInput, div, btn, role }) {
 
     if (!results || results.length === 0) {
       div.innerHTML = "";
-      div.appendChild(renderEmpty(`No lessons ${dayWord()}`, "Please try another name, or switch day."));
+      div.appendChild(
+        renderEmpty(
+          isStudentUi() ? tDay("noLessons") : `No lessons ${dayWord()}`,
+          isStudentUi() ? t("tryAnotherOrDay") : "Please try another name, or switch day."
+        )
+      );
       scheduleResultsReset(div);
       showRefreshButton();
       return;
@@ -748,7 +1097,12 @@ async function runQuery(query, { nameInput, div, btn, role }) {
   } catch (err) {
     console.error(err);
     div.innerHTML = "";
-    div.appendChild(renderEmpty("Error loading data", "Please try again in a moment."));
+    div.appendChild(
+      renderEmpty(
+        isStudentUi() ? t("errorLoading") : "Error loading data",
+        isStudentUi() ? t("tryAgain") : "Please try again in a moment."
+      )
+    );
     scheduleResultsReset(div);
     showRefreshButton();
   } finally {
@@ -822,11 +1176,11 @@ function showChoicesModal(choices, onPick, onCancel, { titleText, subText, modal
 
   const h = document.createElement("p");
   h.className = "modalTitle";
-  h.textContent = titleText || "Which person do you mean?";
+  h.textContent = titleText || t("whichPerson");
 
   const sub = document.createElement("p");
   sub.className = "modalSub";
-  sub.textContent = subText || `Select the correct name to show ${dayWord()}'s lessons.`;
+  sub.textContent = subText || tDay("selectForLessons");
 
   header.appendChild(h);
   header.appendChild(sub);
@@ -852,7 +1206,7 @@ function showChoicesModal(choices, onPick, onCancel, { titleText, subText, modal
   const cancel = document.createElement("button");
   cancel.className = "btnSecondary";
   cancel.type = "button";
-  cancel.textContent = "Cancel";
+  cancel.textContent = t("cancel");
   cancel.addEventListener("click", () => onCancel());
 
   actions.appendChild(cancel);
@@ -1303,7 +1657,7 @@ function updateAvailAuthUI(unlocked) {
   if (refreshBtn) refreshBtn.hidden = !unlocked;
   if (sub) {
     sub.textContent = unlocked
-      ? "13/F · 10/F · 8/F · Helios + Achievers calendars"
+      ? "13/F · 10/F · 8/F · shared Helios & Achievers calendars"
       : "Password required · room availability";
   }
 }
@@ -2302,11 +2656,11 @@ function buildRoomDayTimeline(room, data, viewOpts = {}) {
 
       block.appendChild(time);
       block.appendChild(title);
-      if (ev.source === "wc10") {
-        block.classList.add("is-from-wc10");
+      if (ev.source === "wc10" || ev.source === "helios") {
+        block.classList.add(ev.source === "wc10" ? "is-from-wc10" : "is-from-helios");
         const src = document.createElement("span");
         src.className = "availDaySourceTag";
-        src.textContent = "Achievers cal";
+        src.textContent = ev.source === "wc10" ? "Achievers" : "Helios";
         block.appendChild(src);
       }
       if (ev.conflict) {
@@ -2315,7 +2669,12 @@ function buildRoomDayTimeline(room, data, viewOpts = {}) {
         tag.textContent = "Conflict";
         block.appendChild(tag);
       }
-      const sourceNote = ev.source === "wc10" ? " · from Achievers calendar" : "";
+      const sourceNote =
+        ev.source === "wc10"
+          ? " · from Achievers calendar"
+          : ev.source === "helios"
+            ? " · from Helios calendar"
+            : "";
       block.title = ev.conflict
         ? `Conflict · ${ev.start}–${ev.end} · ${ev.title || "Busy"}${sourceNote}`
         : `${ev.start}–${ev.end} · ${ev.title || "Busy"}${sourceNote}`;
@@ -2784,6 +3143,8 @@ function showAvailEventDetails(room, ev, dateStr) {
   });
 }
 
+loadStudentLang();
+initLangSwitch();
 initModeSwitch();
 initDayNav();
 applyAccessMode();

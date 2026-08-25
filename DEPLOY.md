@@ -23,9 +23,10 @@ Keys live in [`app.js`](./app.js) and [`Code.gs`](./Code.gs) — keep them ident
 5. Share these calendars with the Apps Script owner:
    - Helios 13/F: `admissions@helios-edu.com`
    - Wan Chai / 10/F: `admin@achievershk.com` ([embed](https://calendar.google.com/calendar/embed?src=admin%40achievershk.com&ctz=Asia%2FHong_Kong))
-   - For **reading** availability: at least “See all event details”
+   - For **reading** availability and student/tutor search: at least “See all event details”
    - For **creating** bookings from the portal: “Make changes to events” (or higher) on both calendars
    Availability merges both so a room booked only on the 10/F calendar still shows as occupied. Tracked rooms: CEO Room, 1309A–E/G, 1012B, 804D, 804F.
+   Student/tutor search also reads Helios (plus Wan Chai and Prince Edward). Events whose title, description, or location contain **Meeting** or **Consultation** are hidden from search only — they still occupy rooms on the availability grid.
 6. **Deploy → Manage deployments → Edit → New version → Deploy**.
    - Execute as: **Me**
    - Who has access: **Anyone**
@@ -42,6 +43,39 @@ GitHub Pages only hosts the static UI. Availability login and calendar reads run
 
 The password is **not** stored in the frontend. The token lives in `sessionStorage` and expires after about 6 hours (or when the tab is closed).
 
+## Calendar naming rules (Achievers + Helios)
+
+Use the same pattern on both calendars so student and tutor search can find lessons.
+
+**Title**
+
+- Required shape: `Student name x Tutor name`
+- Left of ` x ` = student. Right of ` x ` = tutor.
+- Room prefix is optional and is stripped for name matching:
+  - `1309A: Jayden Chan x Traf`
+  - `CEO Room: Jayden Chan x Traf`
+  - `Room B: Jayden Chan x Traf` (Helios short form → 1309B)
+
+**Description (backup, preferred for display when present)**
+
+```
+Student: Jayden Chan
+Tutor: Traf
+```
+
+**Do not put these words in lesson events if they should appear in student/tutor search**
+
+- `Meeting` / `Meetings`
+- `Consultation` / `Consultations`
+
+Those events still occupy the room on **Room availability**. They are hidden from student and tutor search.
+
+**Other existing rules**
+
+- Cancelled: put `Cancelled` in the title
+- Online: put `Online` in the title, or `Mode: Online` in the description
+- Room: put the room code in the title, location, or description (`1309A`, `1012B`, `804D`, `CEO Room`)
+
 ## 2. Push the frontend (GitHub Pages)
 
 Push to `main`. [`.github/workflows/static.yml`](./.github/workflows/static.yml) deploys the site automatically.
@@ -52,11 +86,14 @@ Push to `main`. [`.github/workflows/static.yml`](./.github/workflows/static.yml)
 
 - Partial name → picker if several people match
 - `Dan` should find lessons (not a dead `Dan, Dan` choice)
+- Helios lessons appear when the title follows `Student x Tutor` (room prefix like `1309A:` is OK)
+- Events with Meeting / Consultation in the text do **not** appear
 - Help note about Room 1012 is visible
 
 **Tutor link (`?tutor=...`)**
 
 - Searches tutor side of titles / `Tutor:` description
+- Includes Helios lessons; still hides Meeting / Consultation
 - No Floor board tab
 
 **Staff link (`?staff=...`)**

@@ -29,6 +29,7 @@ body{
   min-height:100vh;
   display:flex;
   align-items:stretch;
+  overflow-x:hidden;
 }
 
 .wrap{
@@ -60,12 +61,34 @@ header.app-header{
   align-items:center;
   gap:28px;
   min-width: 0;
+  flex:1 1 auto;
+}
+
+.logoLockup{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  flex:0 0 auto;
 }
 
 .logo{
-  width:148px;
   height:auto;
   display:block;
+}
+
+.logoAchievers{
+  width:132px;
+}
+
+.logoHelios{
+  width:156px;
+}
+
+.logoDivider{
+  width:1px;
+  height:42px;
+  background:rgba(255,255,255,.38);
+  flex:0 0 auto;
 }
 
 .brandText{
@@ -74,26 +97,30 @@ header.app-header{
   min-width:0;
 }
 
+.app-header .brandEyebrow{
+  margin:0 0 4px;
+  color:rgba(255,255,255,.78);
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
 .app-header .title{
   font-weight:800;
   letter-spacing:-0.02em;
-  font-size:clamp(28px, 4.8vw, 46px);
+  font-size:clamp(26px, 4.4vw, 42px);
   line-height:1.12;
   margin:0;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
   color:#fff;
 }
 
 .app-header .subtitle{
   margin:12px 0 0;
   color:#fff;
-  font-size:clamp(18px, 2.6vw, 26px);
+  font-size:clamp(16px, 2.4vw, 22px);
   font-weight:500;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  line-height:1.35;
 }
 
 button.modeBtn,
@@ -124,26 +151,105 @@ button.floorTab.is-active{
   box-shadow: 0 10px 22px rgba(0, 36, 125, .22) !important;
 }
 
-.staffBadge{
+.versionBanner{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:6px 10px;
   margin:0;
-  width:fit-content;
-  padding:8px 12px;
+  padding:12px 16px;
+  border-radius:16px;
+  background: rgba(0, 36, 125, .08);
+  border:1px solid rgba(0, 36, 125, .12);
+  color: var(--ink);
+}
+
+.versionBanner strong{
+  padding:3px 9px;
   border-radius:999px;
-  background: rgba(0, 36, 125, .10);
-  color: var(--header-navy);
-  font-size:13px;
+  background: var(--header-navy);
+  color:#fff;
+  font-size:12px;
   font-weight:800;
-  letter-spacing:.02em;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+
+.versionBanner span{
+  color: var(--muted);
+  font-size:14px;
+  font-weight:650;
+  line-height:1.4;
+}
+
+body.is-tutor .versionBanner strong{
+  background:#0f4c81;
+}
+
+body.is-staff .versionBanner strong{
+  background:#1d4ed8;
+}
+
+.roomWarning{
+  margin:0;
+  padding:18px 20px;
+  border-radius:18px;
+  border:2px solid #b45309;
+  background:#fff7ed;
+  color:#7c2d12;
+}
+
+.roomWarningKicker{
+  margin:0 0 6px;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#c2410c;
+}
+
+.roomWarningTitle{
+  margin:0 0 8px;
+  font-size:clamp(20px, 3.2vw, 28px);
+  font-weight:900;
+  letter-spacing:-0.02em;
+  line-height:1.2;
+  color:#9a3412;
+}
+
+.roomWarningBody{
+  margin:0;
+  font-size:clamp(15px, 2vw, 18px);
+  font-weight:650;
+  line-height:1.45;
+}
+
+.roomWarningBody strong{
+  font-weight:900;
+  color:#7c2d12;
 }
 
 .helpNote{
   margin:18px 0 0;
-  padding:16px 18px;
+  padding:14px 16px;
   border-radius:16px;
   border:1px solid rgba(0, 36, 125, .12);
   background:
     linear-gradient(180deg, rgba(0, 36, 125, .06), rgba(0, 36, 125, .03));
   color: var(--ink);
+}
+
+.helpNoteRole{
+  display:inline-block;
+  margin:0 0 8px;
+  padding:4px 9px;
+  border-radius:999px;
+  background:rgba(0, 36, 125, .10);
+  color: var(--header-navy);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
 }
 
 .helpNoteTitle{
@@ -154,8 +260,7 @@ button.floorTab.is-active{
   color: var(--header-navy);
 }
 
-.helpNoteBody,
-.helpNoteContact{
+.helpNoteBody{
   margin:0;
   color: var(--muted);
   font-size:14px;
@@ -163,12 +268,72 @@ button.floorTab.is-active{
   line-height:1.55;
 }
 
-.helpNoteReminder{
+.helpNoteSection{
+  margin:12px 0 6px;
+  color: var(--header-navy);
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+
+.helpNoteOffice + .helpNoteOffice{
   margin-top:8px;
 }
 
-.helpNoteContact{
-  margin-top:10px;
+.helpNoteOfficeName{
+  margin:0 0 2px;
+  color: var(--ink);
+  font-size:14px;
+  font-weight:800;
+}
+
+.helpNoteOfficeList,
+.helpNotePhones{
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+
+.helpNoteOfficeList li{
+  margin:0;
+  color: var(--muted);
+  font-size:13px;
+  font-weight:600;
+  line-height:1.45;
+}
+
+.helpNotePhones{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.helpNotePhones li{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:6px 12px;
+  padding:8px 10px;
+  border-radius:12px;
+  background:rgba(255,255,255,.7);
+  border:1px solid rgba(0, 36, 125, .08);
+}
+
+.helpNotePhones li.is-primary{
+  border-color: rgba(0, 36, 125, .22);
+  background:rgba(0, 36, 125, .06);
+}
+
+.helpNotePhoneRole{
+  color: var(--ink);
+  font-size:13px;
+  font-weight:800;
+}
+
+.helpNoteReminder{
+  margin-top:12px;
 }
 
 .helpNote a{
@@ -185,7 +350,7 @@ button.floorTab.is-active{
 .empty .helpNote{
   margin-top:16px;
   text-align:left;
-  max-width:560px;
+  max-width:100%;
   width:100%;
 }
 
@@ -331,6 +496,44 @@ button.dayArrow:disabled{
   flex-wrap:wrap;
   gap:8px;
   align-items:center;
+}
+
+.modeSwitch[hidden]{
+  display:none !important;
+}
+
+.langSwitch{
+  display:flex;
+  gap:8px;
+  margin-left:auto;
+}
+
+.langSwitch[hidden]{
+  display:none;
+}
+
+body.is-student .langSwitch{
+  margin-left:0;
+}
+
+.langBtn{
+  min-width:88px;
+  height:40px;
+  padding:0 16px;
+  border-radius:12px;
+  border:1px solid rgba(12, 26, 54, .14);
+  background:#fff;
+  color:var(--ink);
+  font-weight:800;
+  font-size:15px;
+  letter-spacing:.02em;
+  cursor:pointer;
+}
+
+.langBtn.is-active{
+  background: var(--header-navy) !important;
+  color:#fff !important;
+  border-color: var(--header-navy);
 }
 
 /* ===== Room availability ===== */
@@ -2137,17 +2340,35 @@ button.btnRefresh:active{
   }
 
   .brand{
+    flex-direction:column;
+    align-items:flex-start;
     gap:14px;
     width:100%;
   }
 
-  .logo{
-    width:72px;
-    flex:0 0 auto;
+  .logoLockup{
+    gap:10px;
+  }
+
+  .logoAchievers{
+    width:78px;
+  }
+
+  .logoHelios{
+    width:96px;
+  }
+
+  .logoDivider{
+    height:28px;
+  }
+
+  .app-header .brandEyebrow{
+    font-size:11px;
+    letter-spacing:.07em;
   }
 
   .app-header .title{
-    font-size:22px;
+    font-size:26px;
     white-space:normal;
     overflow:visible;
     text-overflow:unset;
@@ -2168,6 +2389,18 @@ button.btnRefresh:active{
     width:100%;
   }
 
+  body.is-student .modeSwitch{
+    justify-content:flex-start;
+  }
+
+  body.is-student .langSwitch{
+    width:100%;
+  }
+
+  body.is-student .langBtn{
+    flex:1 1 0;
+  }
+
   .modeBtn{
     flex:1 1 0;
     height:44px;
@@ -2175,9 +2408,24 @@ button.btnRefresh:active{
     padding:0 10px;
   }
 
-  .staffBadge{
-    font-size:12px;
-    padding:6px 10px;
+  .langBtn{
+    height:38px;
+    font-size:14px;
+    padding:0 14px;
+    min-width:80px;
+  }
+
+  .versionBanner{
+    padding:10px 12px;
+  }
+
+  .versionBanner span{
+    font-size:13px;
+  }
+
+  .roomWarning{
+    padding:14px 14px;
+    border-radius:16px;
   }
 
   .panelInner{
@@ -2607,7 +2855,8 @@ button.btnRefresh:active{
   }
 
   .helpNoteBody,
-  .helpNoteContact{
+  .helpNoteOfficeList li,
+  .helpNotePhoneRole{
     font-size:13px;
   }
 
@@ -2657,12 +2906,20 @@ button.btnRefresh:active{
     gap:12px;
   }
 
-  .logo{
-    width:56px;
+  .logoAchievers{
+    width:64px;
+  }
+
+  .logoHelios{
+    width:82px;
+  }
+
+  .logoDivider{
+    height:24px;
   }
 
   .app-header .title{
-    font-size:19px;
+    font-size:22px;
   }
 
   .app-header .subtitle{

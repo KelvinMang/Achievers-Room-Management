@@ -1,24 +1,40 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Room Finder</title>
+  <title>學生版 · Helios &amp; Achievers 課堂查詢</title>
   <link rel="icon" type="image/png" href="./favicon.png" />
-  <link rel="stylesheet" href="./styles.css?v=41" />
+  <link rel="stylesheet" href="./styles.css?v=53" />
   <meta name="theme-color" content="#00247d" />
 </head>
 <body>
   <div class="wrap">
     <header class="app-header" style="background-color:#00247d">
       <div class="brand">
-        <img class="logo" src="./Achievers_Logo_White_RGB.png" alt="The Achievers logo" />
+        <div class="logoLockup" aria-label="Helios and Achievers">
+          <img class="logo logoAchievers" src="./Achievers_Logo_White_RGB.png" alt="The Achievers" />
+          <span class="logoDivider" aria-hidden="true"></span>
+          <img class="logo logoHelios" src="./Helios_Education_Logo.png" alt="Helios" />
+        </div>
         <div class="brandText">
-          <p class="title">Achievers Lesson Finder</p>
-          <p class="subtitle" id="appSubtitle">Search your name to find today’s room.</p>
+          <p class="brandEyebrow">Helios &amp; Achievers</p>
+          <p class="title" id="appTitle">學生課堂查詢</p>
+          <p class="subtitle" id="appSubtitle">輸入學生姓名，查詢今日課室。</p>
         </div>
       </div>
     </header>
+
+    <p class="versionBanner" id="versionBanner" role="status">
+      <strong id="versionBannerTitle">學生版</strong>
+      <span id="versionBannerDetail">此頁只可搜尋學生姓名，不能搜尋導師姓名。</span>
+    </p>
+
+    <aside class="roomWarning" id="roomWarning" role="alert">
+      <p class="roomWarningKicker" id="roomWarningKicker">重要提示</p>
+      <p class="roomWarningTitle" id="roomWarningTitle">課室或會臨時更改</p>
+      <p class="roomWarningBody" id="roomWarningBody">請只在<strong>上課前 5 小時內</strong>查詢課室，以確保課室編號正確。如你較早前已查過，上課前請再查一次。</p>
+    </aside>
 
     <nav class="modeSwitch" id="modeSwitch" aria-label="View mode" role="tablist" hidden>
       <button type="button" class="modeBtn is-active" id="modeSearchBtn" role="tab" aria-selected="true" data-mode="search">
@@ -30,9 +46,11 @@
       <button type="button" class="modeBtn" id="modeAvailBtn" role="tab" aria-selected="false" data-mode="availability">
         Room availability
       </button>
+      <div class="langSwitch" id="langSwitch" role="group" aria-label="Language">
+        <button type="button" class="langBtn is-active" data-lang="zh-Hant" id="langZhBtn">中文</button>
+        <button type="button" class="langBtn" data-lang="en" id="langEnBtn">English</button>
+      </div>
     </nav>
-
-    <p class="staffBadge" id="staffBadge" hidden>Staff / kiosk mode</p>
 
     <main>
       <section class="panel" id="searchPanel" aria-label="Search panel">
@@ -48,21 +66,21 @@
 
           <form class="searchRow" autocomplete="off" onsubmit="event.preventDefault(); search();">
             <div class="field">
-              <label for="name" id="nameLabel">Your name</label>
-              <input id="name" type="text" name="lesson-query" autocomplete="off" placeholder="e.g. Jayden or Peter Chan" />
+              <label for="name" id="nameLabel">輸入學生姓名</label>
+              <input id="name" type="text" name="lesson-query" autocomplete="off" placeholder="例如 Peter Chan" />
             </div>
             <div class="searchBtnWrap">
-              <button type="submit" id="searchBtn">Search</button>
+              <button type="submit" id="searchBtn">搜尋</button>
             </div>
           </form>
 
           <div class="searchActions">
-            <button type="button" id="refreshBtn" class="btnRefresh" hidden onclick="resetSearch()">Refresh</button>
+            <button type="button" id="refreshBtn" class="btnRefresh" hidden onclick="resetSearch()">重新整理</button>
           </div>
 
           <div id="results" class="results" role="status" aria-live="polite"></div>
 
-          <aside class="helpNote" id="portalHelp" aria-label="Need help finding your room"></aside>
+          <aside class="helpNote" id="portalHelp" aria-label="Office locations and who to call"></aside>
         </div>
       </section>
 
@@ -70,7 +88,7 @@
         <div class="panelInner">
           <div class="boardHeader">
             <div>
-              <p class="boardTitle" id="boardTitle">Today’s rooms — Wan Chai</p>
+              <p class="boardTitle" id="boardTitle">Today’s rooms — Helios &amp; Achievers</p>
               <div class="dayNav dayNavCompact" aria-label="Choose day">
                 <button type="button" class="dayArrow" id="boardDayPrev" aria-label="Previous day">‹</button>
                 <div class="dayNavCenter">
@@ -89,7 +107,7 @@
             <button type="button" class="floorTab" data-floor="8" role="tab" aria-selected="false">8/F</button>
           </div>
 
-          <p class="boardHint">Scan for your lesson · room is on the right</p>
+          <p class="boardHint">Helios &amp; Achievers lessons · room is on the right</p>
 
           <div id="board" class="board" role="status" aria-live="polite"></div>
         </div>
@@ -165,6 +183,6 @@
     </main>
   </div>
 
-  <script src="./app.js?v=45"></script>
+  <script src="./app.js?v=54"></script>
 </body>
 </html>

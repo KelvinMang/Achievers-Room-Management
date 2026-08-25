@@ -14,6 +14,8 @@
  * Staff key: student + tutor search + floor board.
  * Room availability: staff key + AVAILABILITY_PASSWORD (Script Property) + session token.
  * Availability merges Helios 13/F + Wan Chai (10/F) calendars for tracked rooms.
+ * Student/tutor search also reads Helios, plus Wan Chai and Prince Edward.
+ * Search hides events whose title/description/location contains Meeting or Consultation.
  * Creating events requires Make changes to events on Helios + Wan Chai calendars.
  *
  * Keep STAFF_KEY / TUTOR_KEY in sync with app.js.
@@ -79,6 +81,13 @@ var SUBJECT_STOPWORDS = {
   summer: true,
   higher: true,
   foundation: true,
+  personal: true,
+  statement: true,
+  portfolio: true,
+  class: true,
+  classes: true,
+  workshop: true,
+  workshops: true,
   online: true,
   cancelled: true,
   student: true,
@@ -95,7 +104,12 @@ var SUBJECT_STOPWORDS = {
   y12: true,
   y13: true,
   room: true,
-  flat: true
+  flat: true,
+  meeting: true,
+  meetings: true,
+  consultation: true,
+  consultations: true,
+  ceo: true
 };
 
 var PAREN_NOISE = {
@@ -881,7 +895,11 @@ function runSearch(params, access) {
     role = "tutor";
   }
 
-  var calendars = [WAN_CHAI_CALENDAR_ID, PRINCE_EDWARD_CALENDAR_ID];
+  var calendars = [
+    WAN_CHAI_CALENDAR_ID,
+    PRINCE_EDWARD_CALENDAR_ID,
+    HELIOS_13F_CALENDAR_ID
+  ];
   var queryKeywords = tokenizeNameQuery(name);
   var keyword = queryKeywords.length === 1 ? queryKeywords[0] : "";
   var shouldAskChoice = !!(keyword && (role === "student" || role === "tutor"));
@@ -890,6 +908,7 @@ function runSearch(params, access) {
   var results = [];
   var choiceSet = {};
   var personNameSet = {};
+  var seen = {};
 
   getEventsForCalendars(calendars, range.start, range.end).forEach(function (item) {
     var ev = item.ev;
@@ -900,18 +919,21 @@ function runSearch(params, access) {
     var desc = ev.getDescription() || "";
     var locationField = ev.getLocation() || "";
     var rawCombined = (title + " " + desc + " " + locationField).trim();
+    if (isMeetingOrConsultation(rawCombined)) return;
+
     var combinedLower = rawCombined.toLowerCase();
-    var split = splitTitleByRole(title);
+    var titleForNames = stripLeadingRoomPrefix(title);
+    var split = splitTitleByRole(titleForNames);
 
     var displayPerson =
       role === "tutor"
-        ? extractTutorDisplayName(title, desc)
-        : extractStudentDisplayName(title, desc);
+        ? extractTutorDisplayName(titleForNames, desc)
+        : extractStudentDisplayName(titleForNames, desc);
 
     var targetSegment = "";
     if (role === "student") {
       targetSegment = (
-        split.student +
+        stripSearchNameNoise(split.student) +
         " " +
         extractStudentsFromDescription(desc) +
         " " +
@@ -919,7 +941,7 @@ function runSearch(params, access) {
       ).toLowerCase();
     } else if (role === "tutor") {
       targetSegment = (
-        split.tutor +
+        stripSearchNameNoise(split.tutor) +
         " " +
         extractTutorFromDescription(desc) +
         " " +
@@ -933,15 +955,15 @@ function runSearch(params, access) {
 
     // Skip online for on-site room finder results? Keep online for search (student/tutor still want it).
     var online = isOnline(combinedLower) || isOnlineMode(desc);
-    var roomData = extractRoom(title, desc, locationField);
+    var roomData = extractRoomForSearch(title, desc, locationField, id);
 
     if (displayPerson && displayPerson !== "Group class" && displayPerson !== "Lesson") {
       personNameSet[displayPerson] = true;
     }
 
     var row = {
-      student: role === "tutor" ? extractStudentDisplayName(title, desc) : displayPerson,
-      tutor: role === "tutor" ? displayPerson : extractTutorDisplayName(title, desc),
+      student: role === "tutor" ? extractStudentDisplayName(titleForNames, desc) : displayPerson,
+      tutor: role === "tutor" ? displayPerson : extractTutorDisplayName(titleForNames, desc),
       start: ev.getStartTime(),
       end: ev.getEndTime(),
       location: detectLocation(id),
@@ -954,6 +976,10 @@ function runSearch(params, access) {
     if (staff || tutorOnly) {
       row.title = title;
     }
+
+    var dedupeKey = searchResultDedupeKey(row);
+    if (seen[dedupeKey]) return;
+    seen[dedupeKey] = true;
 
     results.push(row);
 
@@ -981,7 +1007,7 @@ function runSearch(params, access) {
   }
 
   if (choices.length > 1 && (shouldAskChoice || !staff || tutorOnly)) {
-    return { choices: choices, results: [], day: day };
+    return { choices: choices, results: [], day: day, staff: staff, tutor: tutorOnly };
   }
 
   results.sort(function (a, b) {
@@ -1134,37 +1160,145 @@ function isCancelled(title) {
   return /\bcancel+ed\b/i.test(String(title || "")) || /^\(cancelled\)/i.test(String(title || ""));
 }
 
+function isMeetingOrConsultation(text) {
+  return /\bmeetings?\b/i.test(String(text || "")) || /\bconsultations?\b/i.test(String(text || ""));
+}
+
+function stripSearchNameNoise(segment) {
+  return stripNoiseFromSegment(segment)
+    .replace(/\b(meetings?|consultations?)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripLeadingRoomPrefix(title) {
+  return String(title || "")
+    .replace(/^\s*(?:CEO\s*Room|CEO)\s*:\s*/i, "")
+    .replace(/^\s*\d{3,4}\s*(?:Room\s*)?[A-Za-z]?\s*:\s*/i, "")
+    .replace(/^\s*Room\s*[A-EGa-eg]\s*:\s*/i, "")
+    .trim();
+}
+
 function detectLocation(id) {
-  if (String(id || "").indexOf("admin") !== -1) return "Wan Chai";
+  var calId = String(id || "");
+  if (calId === HELIOS_13F_CALENDAR_ID) return "Wan Chai";
+  if (calId === WAN_CHAI_CALENDAR_ID) return "Wan Chai";
+  if (calId.indexOf("admin") !== -1) return "Wan Chai";
   return "Prince Edward";
+}
+
+function searchResultDedupeKey(row) {
+  return [
+    row.start instanceof Date ? row.start.getTime() : String(row.start || ""),
+    row.end instanceof Date ? row.end.getTime() : String(row.end || ""),
+    String(row.student || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim(),
+    String(row.tutor || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim(),
+    String(row.room || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim()
+  ].join("|");
 }
 
 // ===== Room extraction =====
 
 function extractRoom(title, desc, location) {
-  var match = matchRoom(location);
+  // Colleagues usually put the room in Description, not the title.
+  var fromDescLine = extractExplicitRoomLine(desc);
+  if (fromDescLine) return fromDescLine;
+
+  var match = matchRoom(desc);
   if (match) return formatMatch(match);
 
-  match = matchRoom(desc);
+  var ceo = matchCeoRoom(desc) || matchCeoRoom(location) || matchCeoRoom(title);
+  if (ceo) return ceo;
+
+  match = matchRoom(location);
   if (match) return formatMatch(match);
 
   match = matchRoom(title);
   if (match) return formatMatch(match);
 
+  var shortId =
+    matchShortHeliosRoom(desc) ||
+    matchShortHeliosRoom(location) ||
+    matchShortHeliosRoom(title);
+  if (shortId) return formatSearchRoomFromAvailId(shortId);
+
   return { raw: "TBC", formatted: "TBC" };
+}
+
+function extractRoomForSearch(title, desc, location, calendarId) {
+  var roomData = extractRoom(title, desc, location);
+  if (roomData && roomData.raw && roomData.raw !== "TBC") return roomData;
+
+  var availId = matchAvailRoom(title, desc, location);
+  if (!availId) return roomData;
+  return formatSearchRoomFromAvailId(availId);
+}
+
+function extractExplicitRoomLine(desc) {
+  var text = String(desc || "");
+  var m = text.match(/(?:^|\n)\s*rooms?\s*[:\-–]\s*([^\n]+)/i);
+  if (!m) return null;
+  var value = String(m[1] || "").trim();
+  if (!value) return null;
+
+  var ceo = matchCeoRoom(value);
+  if (ceo) return ceo;
+
+  var room = matchRoom(value);
+  if (room) return formatMatch(room);
+
+  var short = matchShortHeliosRoom(value) || matchShortHeliosRoom("Room " + value);
+  if (short) return formatSearchRoomFromAvailId(short);
+  return null;
+}
+
+function matchCeoRoom(text) {
+  if (!text) return null;
+  if (/\bCEO\s*Room\b/i.test(text) || /(^|[\s:])CEO\s*:/i.test(text) || /^CEO$/i.test(String(text).trim())) {
+    return { raw: "CEO", formatted: "CEO Room, 13/F" };
+  }
+  return null;
+}
+
+function matchShortHeliosRoom(text) {
+  if (!text) return null;
+  if (/\b(?:1012|804|1309)\b/i.test(text)) return null;
+  var value = String(text).trim();
+  if (/^[A-EGa-eg]$/.test(value)) {
+    return "1309" + value.toUpperCase();
+  }
+  var shortRoom = value.match(/(?:^|[\s:])Room\s*([A-EGa-eg])\b/i);
+  if (shortRoom) return "1309" + String(shortRoom[1]).toUpperCase();
+  return null;
+}
+
+function formatSearchRoomFromAvailId(roomId) {
+  if (roomId === "CEO") {
+    return { raw: "CEO", formatted: "CEO Room, 13/F" };
+  }
+  var m = String(roomId || "").match(/^(\d{3,4})([A-Za-z])?$/);
+  if (m) return formatMatch(m);
+  return { raw: roomId, formatted: availRoomLabel(roomId) };
 }
 
 function matchRoom(text) {
   if (!text) return null;
-  // 1309G, 1012B, 804F, or "1309 Room C"
-  var re = /\b(\d{3,4})\s*(?:Room\s*)?([A-Za-z])?\b/i;
-  var m = String(text).match(re);
-  if (!m) return null;
-
-  var number = m[1];
-  // Ignore years / random 4-digit noise that is not a floor room (e.g. 2029)
-  if (!looksLikeRoomNumber(number)) return null;
-  return m;
+  // 1309G, 1012B, 804F, or "1309 Room C". Skip years such as 2028 in the description.
+  var re = /\b(\d{3,4})\s*(?:Room\s*)?([A-Za-z])?\b/gi;
+  var m;
+  while ((m = re.exec(String(text)))) {
+    if (looksLikeRoomNumber(m[1])) return m;
+  }
+  return null;
 }
 
 function looksLikeRoomNumber(number) {
